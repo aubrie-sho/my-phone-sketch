@@ -178,6 +178,8 @@ function stopFloating() {
   canvas.style.display = 'block';
 }
 
+let waddlePhase = 0;
+
 function tick(now) {
   if (!floating) return;
 
@@ -185,7 +187,7 @@ function tick(now) {
   lastTime = now;
 
   const W = window.innerWidth;
-  const bottom = controls.getBoundingClientRect().top; // stay above the Retake button
+  const bottom = controls.getBoundingClientRect().top; // stay above the buttons
 
   // Drift
   f.x += f.vx * dt;
@@ -197,13 +199,14 @@ function tick(now) {
   if (f.y < 0) { f.y = 0; f.vy = Math.abs(f.vy); }
   if (f.y + f.h > bottom) { f.y = bottom - f.h; f.vy = -Math.abs(f.vy); }
 
-  // Gentle sway so it feels like it's floating
-  const t = now / 1000;
-  const sway = Math.sin(t * 0.9) * 0.08; // rotation in radians
-  const bob = 1 + Math.sin(t * 1.4) * 0.03; // slight size breathing
+  // Waddle: rock side to side, with a little hop on each step
+  waddlePhase += dt * 9;                       // step speed
+  const tilt = Math.sin(waddlePhase) * 0.22;   // how far it rocks (radians)
+  const hop = Math.abs(Math.sin(waddlePhase)) * 8; // pixels lifted per step
 
+  const flip = f.vx < 0 ? -1 : 1;
   floater.style.transform =
-    `translate(${f.x}px, ${f.y}px) rotate(${sway}rad) scale(${bob})`;
+    `translate(${f.x}px, ${f.y - hop}px) rotate(${tilt}rad) scaleX(${flip})`;
 
   rafId = requestAnimationFrame(tick);
 }
