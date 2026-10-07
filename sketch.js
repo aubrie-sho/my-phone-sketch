@@ -40,6 +40,7 @@ function captureDrawing() {
   let buffer = createGraphics(vw, vh);
   buffer.pixelDensity(1); // <-- the important line
   buffer.drawingContext.drawImage(capture.elt, 0, 0, vw, vh);
+  capturedBuffer = buffer; 
 
   processedImage = removeBackground(buffer);
   buffer.remove(); // free the offscreen canvas
@@ -85,6 +86,7 @@ function draw() {
   // Pink background (will be changed later)
   background(255, 182, 193);
 
+  if (isCaptured && capturedBuffer) image(capturedBuffer, 0, 0, width, height);
   if (!isCaptured) {
     // Show live camera feed using native drawImage to avoid iOS scanlines
     if (capture && capture.elt.readyState >= 2) {
