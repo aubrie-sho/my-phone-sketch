@@ -18,6 +18,15 @@
       width: 100%;
       height: 100%;
       object-fit: contain; /* keeps the drawing's proportions */
+      z-index: 2;          /* sits above the waddling drawings while you edit */
+    }
+    .creature {
+      position: fixed;
+      top: 0;
+      left: 0;
+      transform-origin: 50% 100%; /* pivot from the "feet" */
+      pointer-events: none;
+      z-index: 1;
     }
     #hint {
       position: fixed;
@@ -26,6 +35,7 @@
       transform: translate(-50%, -50%);
       width: min(80vw, 360px);
       pointer-events: none; /* taps pass through to the page */
+      z-index: 2;
     }
     #hint img {
       width: 100%;
@@ -55,6 +65,7 @@
       flex-direction: column;
       align-items: center;
       gap: 14px;
+      z-index: 3;
     }
     button {
       font-size: 18px;
@@ -76,18 +87,11 @@
       display: flex;
       gap: 12px;
     }
-   #creature {
-      position: fixed;
-      top: 0;
-      left: 0;
-      transform-origin: 50% 100%; /* pivot from the "feet" */
-      touch-action: none;
-    }
   </style>
 </head>
 <body>
   <canvas id="drawing"></canvas>
-  <canvas id="creature" hidden></canvas>
+
   <div id="hint">
     <img src="stickynote.png" alt="">
     <p>Take a picture of a drawing on white paper, then watch it come to life!</p>
@@ -99,15 +103,15 @@
       <input type="range" id="slider" min="1" max="100" value="50">
     </div>
 
-    <!-- Both buttons sit side by side in this row -->
     <div id="buttons">
       <button id="takeBtn">📸 Take photo</button>
       <button id="doneBtn" hidden>✅ Done</button>
+      <button id="addBtn" hidden>➕ Add drawing</button>
     </div>
   </div>
 
   <input type="file" id="fileInput" accept="image/*" capture="environment" hidden>
 
-  <script src="sketch.js?v=6"></script>
+  <script src="sketch.js?v=8"></script>
 </body>
 </html>

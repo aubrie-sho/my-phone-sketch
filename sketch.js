@@ -1,20 +1,61 @@
 const fileInput = document.getElementById('fileInput');
 const takeBtn = document.getElementById('takeBtn');
 const doneBtn = document.getElementById('doneBtn');
+const addBtn = document.getElementById('addBtn');
 const slider = document.getElementById('slider');
 const sliderWrap = document.getElementById('sliderWrap');
 const hint = document.getElementById('hint');
-const controls = document.getElementById('controls');
+const buttonsRow = document.getElementById('buttons');
 const canvas = document.getElementById('drawing');
-const floater = document.getElementById('creature'); // the cropped, floating drawing
 const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
 const MAX_SIZE = 1400; // shrink big phone photos so processing stays fast
-let sourceData = null; // the original photo's pixels
+let sourceData = null; // the photo currently being edited
+
+// mode is 'start' (nothing yet), 'editing' (a photo is being tuned),
+// or 'floating' (the drawings are waddling around)
+let mode = 'start';
+let wipeOnLoad = false; // true when the next photo should clear all drawings
+
+// ---------- Buttons ----------
+
+// In the waddling screen this is "Start over", which wipes everything.
+// While editing it is "Retake", which only replaces the current photo.
+takeBtn.addEventListener('click', () => {
+  wipeOnLoad = (mode === 'floating');
+  fileInput.click();
+});
+
+// Adds another drawing and keeps the existing ones
+addBtn.addEventListener('click', () => {
+  wipeOnLoad = false;
+  fileInput.click();
+});
+
+doneBtn.addEventListener('click', addCreature);
+
+slider.addEventListener('input', removeBackground);
+
+function enterEditMode() {
+  mode = 'editing';
+  canvas.style.display = 'block';
+  hint.style.display = 'none';
+  sliderWrap.style.display = 'block';
+  doneBtn.hidden = false;
+  addBtn.hidden = true;
+  takeBtn.textContent = '🔄 Retake';
+}
+
+function enterFloatMode() {
+  mode = 'floating';
+  canvas.style.display = 'none';
+  sliderWrap.style.display = 'none';
+  doneBtn.hidden = true;
+  addBtn.hidden = false;
+  takeBtn.textContent = '🔄 Start over';
+}
 
 // ---------- Taking the photo ----------
-
-takeBtn.addEventListener('click', () => fileInput.click());
 
 fileInput.addEventListener('change', () => {
   const file = fileInput.files[0];
@@ -24,7 +65,9 @@ fileInput.addEventListener('change', () => {
   const img = new Image();
 
   img.onload = () => {
-    stopFloating(); // back to editing mode if the drawing was floating
+    // Start over only wipes once a new photo has actually loaded
+    if (wipeOnLoad) wipeCreatures();
+    wipeOnLoad = false;
 
     const scale = Math.min(1, MAX_SIZE / Math.max(img.naturalWidth, img.naturalHeight));
     canvas.width = Math.round(img.naturalWidth * scale);
@@ -34,11 +77,7 @@ fileInput.addEventListener('change', () => {
     sourceData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     URL.revokeObjectURL(url);
 
-    hint.style.display = 'none';
-    sliderWrap.style.display = 'block';
-    doneBtn.hidden = false;
-    takeBtn.textContent = '🔄 Retake';
-
+    enterEditMode();
     removeBackground();
   };
 
@@ -49,8 +88,6 @@ fileInput.addEventListener('change', () => {
   img.src = url;
   fileInput.value = ''; // lets you pick the same photo twice
 });
-
-slider.addEventListener('input', removeBackground);
 
 // ---------- Removing the paper ----------
 
@@ -98,16 +135,13 @@ function removeBackground() {
   ctx.putImageData(out, 0, 0);
 }
 
-// ---------- Floating the drawing ----------
+// ---------- The waddling drawings ----------
 
-let floating = false;
+let creatures = []; // every drawing on the screen
 let rafId = null;
 let lastTime = 0;
-let f = {}; // floater state: position, velocity, size
 
-doneBtn.addEventListener('click', startFloating);
-
-function startFloating() {
+function addCreature() {
   // 1. Find the bounding box of the drawing (pixels that aren't transparent)
   const w = canvas.width;
   const h = canvas.height;
@@ -138,75 +172,86 @@ function startFloating() {
   const bw = maxX - minX + 1;
   const bh = maxY - minY + 1;
 
-  // 2. Crop just the drawing onto the floating canvas
-  floater.width = bw;
-  floater.height = bh;
-  floater.getContext('2d').drawImage(canvas, minX, minY, bw, bh, 0, 0, bw, bh);
+  // 2. Crop just the drawing onto its own new canvas
+  const el = document.createElement('canvas');
+  el.className = 'creature';
+  el.width = bw;
+  el.height = bh;
+  el.getContext('2d').drawImage(canvas, minX, minY, bw, bh, 0, 0, bw, bh);
 
   // 3. Size it for the screen
-  const target = Math.min(window.innerWidth, window.innerHeight) * 0.4;
+  const target = Math.min(window.innerWidth, window.innerHeight) * 0.3;
   const scale = target / Math.max(bw, bh);
-  f.w = bw * scale;
-  f.h = bh * scale;
-  floater.style.width = f.w + 'px';
-  floater.style.height = f.h + 'px';
+  const cw = bw * scale;
+  const ch = bh * scale;
+  el.style.width = cw + 'px';
+  el.style.height = ch + 'px';
+  document.body.appendChild(el);
 
-  // 4. Switch screens: hide the photo and the edit controls
-  canvas.style.display = 'none';
-  sliderWrap.style.display = 'none';
-  doneBtn.hidden = true;
-  floater.hidden = false;
-
-  // 5. Start in the middle, drifting in a random direction
-  const bottom = controls.getBoundingClientRect().top;
-  f.x = (window.innerWidth - f.w) / 2;
-  f.y = (bottom - f.h) / 2;
+  // 4. Give it its own position, drift direction and waddle rhythm
+  const bottom = buttonsRow.getBoundingClientRect().top - 8;
   const angle = Math.random() * Math.PI * 2;
-  const speed = 70; // pixels per second: raise for faster floating
-  f.vx = Math.cos(angle) * speed;
-  f.vy = Math.sin(angle) * speed;
+  const speed = 50 + Math.random() * 40; // pixels per second
+  creatures.push({
+    el: el,
+    w: cw,
+    h: ch,
+    x: (window.innerWidth - cw) / 2,
+    y: (bottom - ch) / 2,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+    phase: Math.random() * Math.PI * 2, // so they don't all waddle in sync
+    step: 8 + Math.random() * 3         // each one has its own step speed
+  });
 
-  floating = true;
-  lastTime = performance.now();
-  rafId = requestAnimationFrame(tick);
+  enterFloatMode();
+
+  // Start the animation loop if it isn't already running
+  if (!rafId) {
+    lastTime = performance.now();
+    rafId = requestAnimationFrame(tick);
+  }
 }
 
-function stopFloating() {
-  floating = false;
+function wipeCreatures() {
+  for (const c of creatures) c.el.remove();
+  creatures = [];
   if (rafId) cancelAnimationFrame(rafId);
-  floater.hidden = true;
-  canvas.style.display = 'block';
+  rafId = null;
 }
-
-let waddlePhase = 0;
 
 function tick(now) {
-  if (!floating) return;
+  if (creatures.length === 0) {
+    rafId = null;
+    return;
+  }
 
   const dt = Math.min(0.033, (now - lastTime) / 1000);
   lastTime = now;
 
   const W = window.innerWidth;
-  const bottom = controls.getBoundingClientRect().top; // stay above the buttons
+  // Floor is just above the button row, so it stays put when the slider appears
+  const bottom = buttonsRow.getBoundingClientRect().top - 8;
 
-  // Drift
-  f.x += f.vx * dt;
-  f.y += f.vy * dt;
+  for (const c of creatures) {
+    // Drift
+    c.x += c.vx * dt;
+    c.y += c.vy * dt;
 
-  // Bounce off the edges
-  if (f.x < 0) { f.x = 0; f.vx = Math.abs(f.vx); }
-  if (f.x + f.w > W) { f.x = W - f.w; f.vx = -Math.abs(f.vx); }
-  if (f.y < 0) { f.y = 0; f.vy = Math.abs(f.vy); }
-  if (f.y + f.h > bottom) { f.y = bottom - f.h; f.vy = -Math.abs(f.vy); }
+    // Bounce off the edges
+    if (c.x < 0) { c.x = 0; c.vx = Math.abs(c.vx); }
+    if (c.x + c.w > W) { c.x = W - c.w; c.vx = -Math.abs(c.vx); }
+    if (c.y < 0) { c.y = 0; c.vy = Math.abs(c.vy); }
+    if (c.y + c.h > bottom) { c.y = bottom - c.h; c.vy = -Math.abs(c.vy); }
 
-  // Waddle: rock side to side, with a little hop on each step
-  waddlePhase += dt * 9;                       // step speed
-  const tilt = Math.sin(waddlePhase) * 0.22;   // how far it rocks (radians)
-  const hop = Math.abs(Math.sin(waddlePhase)) * 8; // pixels lifted per step
+    // Waddle: rock side to side, with a little hop on each step
+    c.phase += dt * c.step;
+    const tilt = Math.sin(c.phase) * 0.22;
+    const hop = Math.abs(Math.sin(c.phase)) * 8;
 
-  const flip = f.vx < 0 ? -1 : 1;
-  floater.style.transform =
-    `translate(${f.x}px, ${f.y - hop}px) rotate(${tilt}rad) scaleX(${flip})`;
+    c.el.style.transform =
+      `translate(${c.x}px, ${c.y - hop}px) rotate(${tilt}rad)`;
+  }
 
   rafId = requestAnimationFrame(tick);
 }
