@@ -6,7 +6,7 @@ let retakeButton;
 let isCaptured = false;
 
 // Background removal settings
-const BRIGHTNESS_THRESHOLD = 200; // Pixels brighter than this become transparent
+const BRIGHTNESS_THRESHOLD = 150; // Pixels brighter than this become transparent
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
@@ -32,22 +32,19 @@ function setup() {
 }
 
 function captureDrawing() {
-  // Wait until video has data
-  if (capture.elt.readyState < 2) {
-    return;
-  }
+  if (capture.elt.readyState < 2) return;
 
-  // Draw current video frame to an offscreen buffer using native drawImage
-  // This avoids the iOS Safari scanline bug with p5.image()
-  let buffer = createGraphics(capture.elt.videoWidth, capture.elt.videoHeight);
-  buffer.drawingContext.drawImage(capture.elt, 0, 0, capture.elt.videoWidth, capture.elt.videoHeight);
+  let vw = capture.elt.videoWidth;
+  let vh = capture.elt.videoHeight;
 
-  // Process: remove background, keep only drawing lines
+  let buffer = createGraphics(vw, vh);
+  buffer.pixelDensity(1); // <-- the important line
+  buffer.drawingContext.drawImage(capture.elt, 0, 0, vw, vh);
+
   processedImage = removeBackground(buffer);
+  buffer.remove(); // free the offscreen canvas
 
   isCaptured = true;
-
-  // Toggle buttons
   captureButton.hide();
   retakeButton.show();
 }
@@ -60,32 +57,24 @@ function retakeDrawing() {
 }
 
 function removeBackground(sourceImg) {
-  // Create a new image with the same dimensions
+  sourceImg.loadPixels();
   let result = createImage(sourceImg.width, sourceImg.height);
   result.loadPixels();
-  sourceImg.loadPixels();
 
-  for (let i = 0; i < result.pixels.length; i += 4) {
+  for (let i = 0; i < sourceImg.pixels.length; i += 4) {
     let r = sourceImg.pixels[i];
     let g = sourceImg.pixels[i + 1];
     let b = sourceImg.pixels[i + 2];
-
-    // Calculate brightness (0-255)
     let brightness = (r + g + b) / 3;
 
-    if (brightness > BRIGHTNESS_THRESHOLD) {
-      // Background pixel -> make transparent
-      result.pixels[i] = 255;
-      result.pixels[i + 1] = 255;
-      result.pixels[i + 2] = 255;
-      result.pixels[i + 3] = 0; // fully transparent
-    } else {
-      // Drawing pixel -> keep original color
-      result.pixels[i] = r;
-      result.pixels[i + 1] = g;
-      result.pixels[i + 2] = b;
-      result.pixels[i + 3] = 255; // fully opaque
-    }
+    result.pixels[i] = r;
+    result.pixels[i + 1] = g;
+    result.pixels[i + 2] = b;
+    result.pixels[i + 3] = brightness > BRIGHTNESS_THRESHOLD ? 0 : 255;
+  
+
+  result.updatePixels();
+  return result;
   }
 
   result.updatePixels();
