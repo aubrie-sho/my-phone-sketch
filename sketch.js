@@ -37,9 +37,6 @@ function captureDrawing() {
   let buffer = createGraphics(capture.width, capture.height);
   buffer.image(capture, 0, 0);
 
-  // Save original as JPEG
-  save(buffer, 'my-drawing', 'jpg');
-
   // Process: remove background, keep only drawing lines
   processedImage = removeBackground(buffer);
 
