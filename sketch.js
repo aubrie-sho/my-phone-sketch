@@ -201,7 +201,7 @@ function tick(now) {
 
   // Waddle: rock side to side, with a little hop on each step
   waddlePhase += dt * 15;                       // step speed
-  const tilt = Math.sin(waddlePhase) * 0.4;   // how far it rocks (radians)
+  const tilt = Math.sin(waddlePhase) * 0.27;   // how far it rocks (radians)
   const hop = Math.abs(Math.sin(waddlePhase)) * 15; // pixels lifted per step
 
   const flip = f.vx < 0 ? -1 : 1;
