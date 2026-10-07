@@ -204,9 +204,8 @@ function tick(now) {
   const tilt = Math.sin(waddlePhase) * 0.22;   // how far it rocks (radians)
   const hop = Math.abs(Math.sin(waddlePhase)) * 8; // pixels lifted per step
 
-  const flip = f.vx < 0 ? -1 : 1;
   floater.style.transform =
-    `translate(${f.x}px, ${f.y - hop}px) rotate(${tilt}rad) scaleX(${flip})`;
+    `translate(${f.x}px, ${f.y - hop}px) rotate(${tilt}rad)`;
 
   rafId = requestAnimationFrame(tick);
 }
