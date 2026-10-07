@@ -19,11 +19,6 @@ function setup() {
   capture.size(640, 480);
   capture.hide();
 
-  // Wait for video to be ready before allowing capture
-  capture.elt.addEventListener('loadeddata', () => {
-    // Video is ready
-  });
-
   // Capture button
   captureButton = createButton('📸 Capture');
   captureButton.position(20, 20);
@@ -42,9 +37,10 @@ function captureDrawing() {
     return;
   }
 
-  // Draw current video frame to an offscreen buffer
+  // Draw current video frame to an offscreen buffer using native drawImage
+  // This avoids the iOS Safari scanline bug with p5.image()
   let buffer = createGraphics(capture.elt.videoWidth, capture.elt.videoHeight);
-  buffer.image(capture, 0, 0, capture.elt.videoWidth, capture.elt.videoHeight);
+  buffer.drawingContext.drawImage(capture.elt, 0, 0, capture.elt.videoWidth, capture.elt.videoHeight);
 
   // Process: remove background, keep only drawing lines
   processedImage = removeBackground(buffer);
@@ -101,9 +97,9 @@ function draw() {
   background(255, 182, 193);
 
   if (!isCaptured) {
-    // Show live camera feed only when video is ready
+    // Show live camera feed using native drawImage to avoid iOS scanlines
     if (capture && capture.elt.readyState >= 2) {
-      image(capture, 0, 0, width, height);
+      drawingContext.drawImage(capture.elt, 0, 0, width, height);
     }
   } else {
     // Show the processed image (transparent background)
