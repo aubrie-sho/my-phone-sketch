@@ -38,7 +38,7 @@ fileInput.addEventListener('change', () => {
   };
 
   img.onerror = () => {
-    hint.textContent = 'Could not load that photo, try again';
+    alert('Could not load that photo, try again');
   };
 
   img.src = url;

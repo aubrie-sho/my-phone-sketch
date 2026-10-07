@@ -21,13 +21,29 @@
     }
     #hint {
       position: fixed;
-      top: 40%;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: min(80vw, 360px);
+      pointer-events: none; /* taps pass through to the page */
+    }
+    #hint img {
       width: 100%;
-      text-align: center;
-      color: white;
-      font-size: 20px;
-      padding: 0 24px;
+      display: block;
+    }
+    #hint p {
+      position: absolute;
+      inset: 0;
+     margin: 0;
+      padding: 14%;
       box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: black;
+      font-family: 'Marker Felt', 'Bradley Hand', 'Segoe Print', cursive;
+      font-size: clamp(16px, 5vw, 24px);
     }
     #controls {
       position: fixed;
@@ -60,7 +76,10 @@
 </head>
 <body>
   <canvas id="drawing"></canvas>
-  <div id="hint">Take a photo of a drawing on white paper</div>
+  <div id="hint">
+    <img src="stickynote.png" alt="">
+    <p>Take a picture of a drawing on white paper, then watch it come to life!</p>
+  </div>
 
   <div id="controls">
     <div id="sliderWrap">
