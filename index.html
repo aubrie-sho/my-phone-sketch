@@ -34,7 +34,7 @@
     #hint p {
       position: absolute;
       inset: 0;
-     margin: 0;
+      margin: 0;
       padding: 14%;
       box-sizing: border-box;
       display: flex;
@@ -67,15 +67,26 @@
     #sliderWrap {
       display: none;
       width: 80%;
-      color: white;
+      color: black;
       text-align: center;
       font-size: 14px;
     }
     #slider { width: 100%; }
+    #buttons {
+      display: flex;
+      gap: 12px;
+    }
+    #creature {
+      position: fixed;
+      top: 0;
+      left: 0;
+      touch-action: none;
+    }
   </style>
 </head>
 <body>
   <canvas id="drawing"></canvas>
+  <canvas id="creature" hidden></canvas>
   <div id="hint">
     <img src="stickynote.png" alt="">
     <p>Take a picture of a drawing on white paper, then watch it come to life!</p>
@@ -86,11 +97,16 @@
       Sensitivity (raise it if lines are missing, lower it if the paper shows up)
       <input type="range" id="slider" min="1" max="100" value="50">
     </div>
-    <button id="takeBtn">📸 Take photo</button>
+
+    <!-- Both buttons sit side by side in this row -->
+    <div id="buttons">
+      <button id="takeBtn">📸 Take photo</button>
+      <button id="doneBtn" hidden>✅ Done</button>
+    </div>
   </div>
 
   <input type="file" id="fileInput" accept="image/*" capture="environment" hidden>
 
-  <script src="sketch.js?v=1"></script>
+  <script src="sketch.js?v=6"></script>
 </body>
 </html>
