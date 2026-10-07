@@ -24,14 +24,12 @@ function setup() {
   captureButton = createButton('📸 Capture');
   captureButton.position(20, 20);
   captureButton.mousePressed(captureDrawing);
-  captureButton.touchStarted(() => false);
 
   // Retake button (hidden until first capture)
   retakeButton = createButton('🔄 Retake');
   retakeButton.position(20, 60);
   retakeButton.hide();
   retakeButton.mousePressed(retakeDrawing);
-  retakeButton.touchStarted(() => false);
 }
 
 function captureDrawing() {
