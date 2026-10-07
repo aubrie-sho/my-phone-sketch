@@ -1,24 +1,134 @@
+let capture;
+let capturedImage = null;
+let hearts = [];
+let captureButton;
+let retakeButton;
+let isCaptured = false;
+
 function setup() {
-  createCanvas(400, 600);
+  createCanvas(windowWidth, windowHeight);
+
+  // Open the back camera
+  capture = createCapture({
+    video: { facingMode: 'environment' },
+    audio: false
+  });
+  capture.size(640, 480);
+  capture.hide();
+
+  // Capture button
+  captureButton = createButton('📸 Capture');
+  captureButton.position(20, 20);
+  captureButton.mousePressed(captureDrawing);
+
+  // Retake button (hidden until first capture)
+  retakeButton = createButton('🔄 Retake');
+  retakeButton.position(20, 60);
+  retakeButton.hide();
+  retakeButton.mousePressed(retakeDrawing);
+}
+
+function captureDrawing() {
+  // Draw current video frame to an offscreen buffer
+  let buffer = createGraphics(capture.width, capture.height);
+  buffer.image(capture, 0, 0);
+
+  // Save as JPEG (downloads to phone gallery/files)
+  save(buffer, 'my-drawing', 'jpg');
+
+  // Display the captured image on the touchscreen
+  capturedImage = buffer;
+  isCaptured = true;
+
+  // Toggle buttons
+  captureButton.hide();
+  retakeButton.show();
+}
+
+function retakeDrawing() {
+  isCaptured = false;
+  capturedImage = null;
+  captureButton.show();
+  retakeButton.hide();
 }
 
 function draw() {
-  // Orange background
-  background(255, 165, 0);
-  
-  // Center the squares
-  rectMode(CENTER);
-  noStroke();
-  
-  // Largest square - dark orange
-  fill(255, 140, 0);
-  rect(width / 2, height / 2, 300, 300);
-  
-  // Medium square - medium orange
-  fill(255, 180, 50);
-  rect(width / 2, height / 2, 200, 200);
-  
-  // Smallest square - light orange
-  fill(255, 210, 100);
-  rect(width / 2, height / 2, 100, 100);
+  background(255);
+
+  if (!isCaptured) {
+    // Show live camera feed
+    if (capture) {
+      image(capture, 0, 0, width, height);
+    }
+  } else {
+    // Show the captured JPEG image
+    if (capturedImage) {
+      image(capturedImage, 0, 0, width, height);
+    }
+  }
+
+  // Update and draw hearts
+  for (let i = hearts.length - 1; i >= 0; i--) {
+    let h = hearts[i];
+    h.update();
+    h.display();
+    if (h.isDead()) {
+      hearts.splice(i, 1);
+    }
+  }
 }
+
+function touchStarted() {
+  if (isCaptured) {
+    // Spawn hearts at tap location
+    for (let i = 0; i < 8; i++) {
+      hearts.push(new Heart(mouseX, mouseY));
+    }
+  }
+  return false; // prevent default browser behavior
+}
+
+class Heart {
+  constructor(x, y) {
+    this.x = x + random(-30, 30);
+    this.y = y + random(-30, 30);
+    this.size = random(15, 40);
+    this.speedY = random(-4, -2);
+    this.speedX = random(-1.5, 1.5);
+    this.life = 255;
+    this.decay = random(1.5, 3);
+    this.rotation = random(-0.4, 0.4);
+    this.rotSpeed = random(-0.02, 0.02);
+  }
+
+  update() {
+    this.x += this.speedX;
+    this.y += this.speedY;
+    this.life -= this.decay;
+    this.speedY -= 0.03; // float upward
+    this.rotation += this.rotSpeed;
+  }
+
+  display() {
+    push();
+    translate(this.x, this.y);
+    rotate(this.rotation);
+    scale(this.size / 30);
+    noStroke();
+    fill(255, 50, 100, this.life);
+
+    // Heart shape
+    beginShape();
+    vertex(0, 10);
+    bezierVertex(-15, -5, -30, 10, 0, 30);
+    bezierVertex(30, 10, 15, -5, 0, 10);
+    endShape(CLOSE);
+
+    pop();
+  }
+
+  isDead() {
+    return this.life <= 0;
+  }
+}
+
