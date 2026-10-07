@@ -1,9 +1,13 @@
 let capture;
 let capturedImage = null;
+let processedImage = null;
 let hearts = [];
 let captureButton;
 let retakeButton;
 let isCaptured = false;
+
+// Background removal settings
+const BRIGHTNESS_THRESHOLD = 200; // Pixels brighter than this become transparent
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
@@ -33,11 +37,12 @@ function captureDrawing() {
   let buffer = createGraphics(capture.width, capture.height);
   buffer.image(capture, 0, 0);
 
-  // Save as JPEG (downloads to phone gallery/files)
+  // Save original as JPEG
   save(buffer, 'my-drawing', 'jpg');
 
-  // Display the captured image on the touchscreen
-  capturedImage = buffer;
+  // Process: remove background, keep only drawing lines
+  processedImage = removeBackground(buffer);
+
   isCaptured = true;
 
   // Toggle buttons
@@ -48,12 +53,47 @@ function captureDrawing() {
 function retakeDrawing() {
   isCaptured = false;
   capturedImage = null;
+  processedImage = null;
   captureButton.show();
   retakeButton.hide();
 }
 
+function removeBackground(sourceImg) {
+  // Create a new image with the same dimensions
+  let result = createImage(sourceImg.width, sourceImg.height);
+  result.loadPixels();
+  sourceImg.loadPixels();
+
+  for (let i = 0; i < result.pixels.length; i += 4) {
+    let r = sourceImg.pixels[i];
+    let g = sourceImg.pixels[i + 1];
+    let b = sourceImg.pixels[i + 2];
+
+    // Calculate brightness (0-255)
+    let brightness = (r + g + b) / 3;
+
+    if (brightness > BRIGHTNESS_THRESHOLD) {
+      // Background pixel -> make transparent
+      result.pixels[i] = 255;
+      result.pixels[i + 1] = 255;
+      result.pixels[i + 2] = 255;
+      result.pixels[i + 3] = 0; // fully transparent
+    } else {
+      // Drawing pixel -> keep original color
+      result.pixels[i] = r;
+      result.pixels[i + 1] = g;
+      result.pixels[i + 2] = b;
+      result.pixels[i + 3] = 255; // fully opaque
+    }
+  }
+
+  result.updatePixels();
+  return result;
+}
+
 function draw() {
-  background(255);
+  // Pink background (will be changed later)
+  background(255, 182, 193);
 
   if (!isCaptured) {
     // Show live camera feed
@@ -61,9 +101,9 @@ function draw() {
       image(capture, 0, 0, width, height);
     }
   } else {
-    // Show the captured JPEG image
-    if (capturedImage) {
-      image(capturedImage, 0, 0, width, height);
+    // Show the processed image (transparent background)
+    if (processedImage) {
+      image(processedImage, 0, 0, width, height);
     }
   }
 
@@ -131,4 +171,3 @@ class Heart {
     return this.life <= 0;
   }
 }
-
