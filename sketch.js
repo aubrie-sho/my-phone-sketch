@@ -37,13 +37,15 @@ function captureDrawing() {
   let vw = capture.elt.videoWidth;
   let vh = capture.elt.videoHeight;
 
-  let buffer = createGraphics(vw, vh);
-  buffer.pixelDensity(1); // <-- the important line
-  buffer.drawingContext.drawImage(capture.elt, 0, 0, vw, vh);
-  capturedBuffer = buffer; 
+  // Plain HTML canvas: no p5 pixel-density handling involved
+  let c = document.createElement('canvas');
+  c.width = vw;
+  c.height = vh;
+  let ctx = c.getContext('2d');
+  ctx.drawImage(capture.elt, 0, 0, vw, vh);
+  let data = ctx.getImageData(0, 0, vw, vh).data;
 
-  processedImage = removeBackground(buffer);
-  buffer.remove(); // free the offscreen canvas
+  processedImage = removeBackground(data, vw, vh);
 
   isCaptured = true;
   captureButton.hide();
@@ -57,25 +59,20 @@ function retakeDrawing() {
   retakeButton.hide();
 }
 
-function removeBackground(sourceImg) {
-  sourceImg.loadPixels();
-  let result = createImage(sourceImg.width, sourceImg.height);
+function removeBackground(data, w, h) {
+  let result = createImage(w, h);
   result.loadPixels();
 
-  for (let i = 0; i < sourceImg.pixels.length; i += 4) {
-    let r = sourceImg.pixels[i];
-    let g = sourceImg.pixels[i + 1];
-    let b = sourceImg.pixels[i + 2];
+  for (let i = 0; i < data.length; i += 4) {
+    let r = data[i];
+    let g = data[i + 1];
+    let b = data[i + 2];
     let brightness = (r + g + b) / 3;
 
     result.pixels[i] = r;
     result.pixels[i + 1] = g;
     result.pixels[i + 2] = b;
     result.pixels[i + 3] = brightness > BRIGHTNESS_THRESHOLD ? 0 : 255;
-  
-
-  result.updatePixels();
-  return result;
   }
 
   result.updatePixels();
@@ -86,7 +83,6 @@ function draw() {
   // Pink background (will be changed later)
   background(255, 182, 193);
 
-  if (isCaptured && capturedBuffer) image(capturedBuffer, 0, 0, width, height);
   if (!isCaptured) {
     // Show live camera feed using native drawImage to avoid iOS scanlines
     if (capture && capture.elt.readyState >= 2) {
