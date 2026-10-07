@@ -87,9 +87,19 @@
       display: flex;
       gap: 12px;
     }
+    #touchLayer {
+      position: fixed;
+     inset: 0;
+      touch-action: none; /* stops Safari from scrolling or zooming while you hold */
+      -webkit-user-select: none;
+     user-select: none;
+      -webkit-touch-callout: none;
+      z-index: 0;
+    }
   </style>
 </head>
 <body>
+  <div id="touchLayer"></div>
   <canvas id="drawing"></canvas>
 
   <div id="hint">

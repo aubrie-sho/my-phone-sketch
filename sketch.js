@@ -134,12 +134,66 @@ function removeBackground() {
 
   ctx.putImageData(out, 0, 0);
 }
-
 // ---------- The waddling drawings ----------
+
+const touchLayer = document.getElementById('touchLayer');
+
+// Tweak these to change how the touch feels
+const ATTRACT_SPEED = 240; // top speed (px/s) when rushing toward your finger
+const ATTRACT_EASE = 4;    // how quickly they speed up toward it (higher = snappier)
+const BURST_MIN = 380;     // scatter speed range (px/s) when you let go
+const BURST_MAX = 600;
+const SETTLE = 1.5;        // how quickly they calm back to normal drift (higher = faster)
 
 let creatures = []; // every drawing on the screen
 let rafId = null;
 let lastTime = 0;
+let touch = { active: false, id: null, x: 0, y: 0 };
+
+// ----- Touch handling -----
+
+touchLayer.addEventListener('pointerdown', (e) => {
+  if (touch.active || mode !== 'floating') return;
+  touch.active = true;
+  touch.id = e.pointerId;
+  touch.x = e.clientX;
+  touch.y = e.clientY;
+  touchLayer.setPointerCapture(e.pointerId); // keep tracking even if the finger slides
+});
+
+touchLayer.addEventListener('pointermove', (e) => {
+  if (touch.active && e.pointerId === touch.id) {
+    touch.x = e.clientX;
+    touch.y = e.clientY;
+  }
+});
+
+function releaseTouch(e) {
+  if (!touch.active || e.pointerId !== touch.id) return;
+  touch.active = false;
+  scatter(touch.x, touch.y);
+}
+touchLayer.addEventListener('pointerup', releaseTouch);
+touchLayer.addEventListener('pointercancel', releaseTouch);
+
+// Send every drawing flying outward from the point where the finger was
+function scatter(fx, fy) {
+  for (const c of creatures) {
+    const dx = (c.x + c.w / 2) - fx;
+    const dy = (c.y + c.h / 2) - fy;
+    const dist = Math.hypot(dx, dy);
+
+    // Away from the finger, or a random direction if right on top of it
+    let angle = dist > 5 ? Math.atan2(dy, dx) : Math.random() * Math.PI * 2;
+    angle += (Math.random() - 0.5) * 1.6; // spread them out a bit
+
+    const burst = BURST_MIN + Math.random() * (BURST_MAX - BURST_MIN);
+    c.vx = Math.cos(angle) * burst;
+    c.vy = Math.sin(angle) * burst;
+  }
+}
+
+// ----- Adding and removing drawings -----
 
 function addCreature() {
   // 1. Find the bounding box of the drawing (pixels that aren't transparent)
@@ -191,7 +245,7 @@ function addCreature() {
   // 4. Give it its own position, drift direction and waddle rhythm
   const bottom = buttonsRow.getBoundingClientRect().top - 8;
   const angle = Math.random() * Math.PI * 2;
-  const speed = 50 + Math.random() * 40; // pixels per second
+  const speed = 50 + Math.random() * 40; // its normal "cruising" speed (px/s)
   creatures.push({
     el: el,
     w: cw,
@@ -200,6 +254,7 @@ function addCreature() {
     y: (bottom - ch) / 2,
     vx: Math.cos(angle) * speed,
     vy: Math.sin(angle) * speed,
+    cruise: speed,                      // what it settles back to after a scatter
     phase: Math.random() * Math.PI * 2, // so they don't all waddle in sync
     step: 8 + Math.random() * 3         // each one has its own step speed
   });
@@ -220,6 +275,8 @@ function wipeCreatures() {
   rafId = null;
 }
 
+// ----- The animation loop -----
+
 function tick(now) {
   if (creatures.length === 0) {
     rafId = null;
@@ -234,7 +291,24 @@ function tick(now) {
   const bottom = buttonsRow.getBoundingClientRect().top - 8;
 
   for (const c of creatures) {
-    // Drift
+    if (touch.active) {
+      // Finger is down: steer toward it, slowing down as they get close
+      const dx = touch.x - (c.x + c.w / 2);
+      const dy = touch.y - (c.y + c.h / 2);
+      const dist = Math.hypot(dx, dy) || 1;
+      const want = Math.min(ATTRACT_SPEED, dist * 1.5);
+      const ease = Math.min(1, ATTRACT_EASE * dt);
+      c.vx += (dx / dist * want - c.vx) * ease;
+      c.vy += (dy / dist * want - c.vy) * ease;
+    } else {
+      // Finger is up: calm back down to normal drift speed, keeping the direction
+      const sp = Math.hypot(c.vx, c.vy) || 1;
+      const newSp = c.cruise + (sp - c.cruise) * Math.exp(-SETTLE * dt);
+      c.vx *= newSp / sp;
+      c.vy *= newSp / sp;
+    }
+
+    // Move
     c.x += c.vx * dt;
     c.y += c.vy * dt;
 
@@ -244,8 +318,11 @@ function tick(now) {
     if (c.y < 0) { c.y = 0; c.vy = Math.abs(c.vy); }
     if (c.y + c.h > bottom) { c.y = bottom - c.h; c.vy = -Math.abs(c.vy); }
 
-    // Waddle: rock side to side, with a little hop on each step
-    c.phase += dt * c.step;
+    // Waddle faster when moving faster
+    const speedNow = Math.hypot(c.vx, c.vy);
+    const excite = Math.min(2.5, Math.max(1, speedNow / c.cruise));
+    c.phase += dt * c.step * excite;
+
     const tilt = Math.sin(c.phase) * 0.22;
     const hop = Math.abs(Math.sin(c.phase)) * 8;
 
