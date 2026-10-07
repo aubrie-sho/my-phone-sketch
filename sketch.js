@@ -1,5 +1,4 @@
 let capture;
-let capturedImage = null;
 let processedImage = null;
 let hearts = [];
 let captureButton;
@@ -20,6 +19,11 @@ function setup() {
   capture.size(640, 480);
   capture.hide();
 
+  // Wait for video to be ready before allowing capture
+  capture.elt.addEventListener('loadeddata', () => {
+    // Video is ready
+  });
+
   // Capture button
   captureButton = createButton('📸 Capture');
   captureButton.position(20, 20);
@@ -33,9 +37,14 @@ function setup() {
 }
 
 function captureDrawing() {
+  // Wait until video has data
+  if (capture.elt.readyState < 2) {
+    return;
+  }
+
   // Draw current video frame to an offscreen buffer
-  let buffer = createGraphics(capture.width, capture.height);
-  buffer.image(capture, 0, 0);
+  let buffer = createGraphics(capture.elt.videoWidth, capture.elt.videoHeight);
+  buffer.image(capture, 0, 0, capture.elt.videoWidth, capture.elt.videoHeight);
 
   // Process: remove background, keep only drawing lines
   processedImage = removeBackground(buffer);
@@ -49,7 +58,6 @@ function captureDrawing() {
 
 function retakeDrawing() {
   isCaptured = false;
-  capturedImage = null;
   processedImage = null;
   captureButton.show();
   retakeButton.hide();
@@ -93,8 +101,8 @@ function draw() {
   background(255, 182, 193);
 
   if (!isCaptured) {
-    // Show live camera feed
-    if (capture) {
+    // Show live camera feed only when video is ready
+    if (capture && capture.elt.readyState >= 2) {
       image(capture, 0, 0, width, height);
     }
   } else {
