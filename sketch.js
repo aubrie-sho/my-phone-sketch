@@ -6,7 +6,7 @@ let retakeButton;
 let isCaptured = false;
 
 // Background removal settings
-const BRIGHTNESS_THRESHOLD = 150; // Pixels brighter than this become transparent
+const BRIGHTNESS_THRESHOLD = 200; // Pixels brighter than this become transparent
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
