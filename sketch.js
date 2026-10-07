@@ -1,161 +1,97 @@
-let capture;
-let processedImage = null;
-let hearts = [];
-let captureButton;
-let retakeButton;
-let isCaptured = false;
+const fileInput = document.getElementById('fileInput');
+const takeBtn = document.getElementById('takeBtn');
+const slider = document.getElementById('slider');
+const sliderWrap = document.getElementById('sliderWrap');
+const hint = document.getElementById('hint');
+const canvas = document.getElementById('drawing');
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-// Background removal settings
-const BRIGHTNESS_THRESHOLD = 200; // Pixels brighter than this become transparent
+const MAX_SIZE = 1400; // shrink big phone photos so processing stays fast
+let sourceData = null; // the original photo's pixels
 
-function setup() {
-  createCanvas(windowWidth, windowHeight);
+// Button opens the camera
+takeBtn.addEventListener('click', () => fileInput.click());
 
-  // Open the back camera
-  capture = createCapture({
-    video: { facingMode: 'environment' },
-    audio: false
-  });
-  capture.size(640, 480);
-  capture.hide();
+// When a photo comes back from the camera
+fileInput.addEventListener('change', () => {
+  const file = fileInput.files[0];
+  if (!file) return;
 
-  // Capture button
-  captureButton = createButton('📸 Capture');
-  captureButton.position(20, 20);
-  captureButton.mousePressed(captureDrawing);
+  const url = URL.createObjectURL(file);
+  const img = new Image();
 
-  // Retake button (hidden until first capture)
-  retakeButton = createButton('🔄 Retake');
-  retakeButton.position(20, 60);
-  retakeButton.hide();
-  retakeButton.mousePressed(retakeDrawing);
-}
+  img.onload = () => {
+    // Scale the photo down and draw it onto our canvas
+    const scale = Math.min(1, MAX_SIZE / Math.max(img.naturalWidth, img.naturalHeight));
+    canvas.width = Math.round(img.naturalWidth * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-function captureDrawing() {
-  if (capture.elt.readyState < 2) return;
+    sourceData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(url);
 
-  let vw = capture.elt.videoWidth;
-  let vh = capture.elt.videoHeight;
+    hint.style.display = 'none';
+    sliderWrap.style.display = 'block';
+    takeBtn.textContent = '🔄 Retake';
 
-  // Plain HTML canvas: no p5 pixel-density handling involved
-  let c = document.createElement('canvas');
-  c.width = vw;
-  c.height = vh;
-  let ctx = c.getContext('2d');
-  ctx.drawImage(capture.elt, 0, 0, vw, vh);
-  let data = ctx.getImageData(0, 0, vw, vh).data;
+    removeBackground();
+  };
 
-  processedImage = removeBackground(data, vw, vh);
+  img.onerror = () => {
+    hint.textContent = 'Could not load that photo, try again';
+  };
 
-  isCaptured = true;
-  captureButton.hide();
-  retakeButton.show();
-}
+  img.src = url;
+  fileInput.value = ''; // lets you pick the same photo twice
+});
 
-function retakeDrawing() {
-  isCaptured = false;
-  processedImage = null;
-  captureButton.show();
-  retakeButton.hide();
-}
+// Re-run whenever the slider moves
+slider.addEventListener('input', removeBackground);
 
-function removeBackground(data, w, h) {
-  let result = createImage(w, h);
-  result.loadPixels();
+function removeBackground() {
+  if (!sourceData) return;
 
-  for (let i = 0; i < data.length; i += 4) {
-    let r = data[i];
-    let g = data[i + 1];
-    let b = data[i + 2];
-    let brightness = (r + g + b) / 3;
+  const src = sourceData.data;
+  const out = ctx.createImageData(sourceData.width, sourceData.height);
+  const dst = out.data;
+  const pixelCount = src.length / 4;
 
-    result.pixels[i] = r;
-    result.pixels[i + 1] = g;
-    result.pixels[i + 2] = b;
-    result.pixels[i + 3] = brightness > BRIGHTNESS_THRESHOLD ? 0 : 255;
+  // 1. Build a brightness histogram to find how bright the paper is.
+  //    The 90th percentile is a good guess, since paper is most of the photo.
+  const hist = new Uint32Array(256);
+  for (let i = 0; i < src.length; i += 4) {
+    const lum = (0.299 * src[i] + 0.587 * src[i + 1] + 0.114 * src[i + 2]) | 0;
+    hist[lum]++;
   }
-
-  result.updatePixels();
-  return result;
-}
-
-function draw() {
-  // Pink background (will be changed later)
-  background(255, 182, 193);
-
-  if (!isCaptured) {
-    // Show live camera feed using native drawImage to avoid iOS scanlines
-    if (capture && capture.elt.readyState >= 2) {
-      drawingContext.drawImage(capture.elt, 0, 0, width, height);
-    }
-  } else {
-    // Show the processed image (transparent background)
-    if (processedImage) {
-      image(processedImage, 0, 0, width, height);
+  let paper = 255;
+  let count = 0;
+  for (let v = 0; v < 256; v++) {
+    count += hist[v];
+    if (count >= pixelCount * 0.9) {
+      paper = v;
+      break;
     }
   }
+  paper = Math.max(paper, 1);
 
-  // Update and draw hearts
-  for (let i = hearts.length - 1; i >= 0; i--) {
-    let h = hearts[i];
-    h.update();
-    h.display();
-    if (h.isDead()) {
-      hearts.splice(i, 1);
-    }
-  }
-}
+  // 2. Slider sets where "ink" starts. Higher = picks up fainter lines.
+  const s = slider.value / 100;
+  const hi = 0.70 + 0.25 * s; // brightness ratio where ink starts to appear
+  const lo = hi - 0.20;       // brightness ratio where ink is fully opaque
 
-function touchStarted() {
-  if (isCaptured) {
-    // Spawn hearts at tap location
-    for (let i = 0; i < 8; i++) {
-      hearts.push(new Heart(mouseX, mouseY));
-    }
-  }
-  return false; // prevent default browser behavior
-}
+  // 3. Darker than paper = ink (opaque), same as paper = transparent
+  for (let i = 0; i < src.length; i += 4) {
+    const lum = 0.299 * src[i] + 0.587 * src[i + 1] + 0.114 * src[i + 2];
+    const ratio = lum / paper;
+    const alpha = Math.min(1, Math.max(0, (hi - ratio) / (hi - lo)));
 
-class Heart {
-  constructor(x, y) {
-    this.x = x + random(-30, 30);
-    this.y = y + random(-30, 30);
-    this.size = random(15, 40);
-    this.speedY = random(-4, -2);
-    this.speedX = random(-1.5, 1.5);
-    this.life = 255;
-    this.decay = random(1.5, 3);
-    this.rotation = random(-0.4, 0.4);
-    this.rotSpeed = random(-0.02, 0.02);
+    dst[i] = src[i];
+    dst[i + 1] = src[i + 1];
+    dst[i + 2] = src[i + 2];
+    dst[i + 3] = alpha * 255;
   }
 
-  update() {
-    this.x += this.speedX;
-    this.y += this.speedY;
-    this.life -= this.decay;
-    this.speedY -= 0.03; // float upward
-    this.rotation += this.rotSpeed;
-  }
-
-  display() {
-    push();
-    translate(this.x, this.y);
-    rotate(this.rotation);
-    scale(this.size / 30);
-    noStroke();
-    fill(255, 50, 100, this.life);
-
-    // Heart shape
-    beginShape();
-    vertex(0, 10);
-    bezierVertex(-15, -5, -30, 10, 0, 30);
-    bezierVertex(30, 10, 15, -5, 0, 10);
-    endShape(CLOSE);
-
-    pop();
-  }
-
-  isDead() {
-    return this.life <= 0;
-  }
+  // Replaces the photo with the transparent version.
+  // The pink you see behind it is the page background in the CSS.
+  ctx.putImageData(out, 0, 0);
 }
