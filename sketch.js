@@ -152,29 +152,48 @@ let touch = { active: false, id: null, x: 0, y: 0 };
 
 // ----- Touch handling -----
 
-touchLayer.addEventListener('pointerdown', (e) => {
+function startTouch(x, y) {
   if (touch.active || mode !== 'floating') return;
   touch.active = true;
-  touch.id = e.pointerId;
-  touch.x = e.clientX;
-  touch.y = e.clientY;
-  touchLayer.setPointerCapture(e.pointerId); // keep tracking even if the finger slides
-});
+  touch.x = x;
+  touch.y = y;
+}
 
-touchLayer.addEventListener('pointermove', (e) => {
-  if (touch.active && e.pointerId === touch.id) {
-    touch.x = e.clientX;
-    touch.y = e.clientY;
+function moveTouch(x, y) {
+  if (touch.active) {
+    touch.x = x;
+    touch.y = y;
   }
-});
+}
 
-function releaseTouch(e) {
-  if (!touch.active || e.pointerId !== touch.id) return;
+function endTouch() {
+  if (!touch.active) return;
   touch.active = false;
   scatter(touch.x, touch.y);
 }
-touchLayer.addEventListener('pointerup', releaseTouch);
-touchLayer.addEventListener('pointercancel', releaseTouch);
+
+// Phone: touch events (preventDefault stops Safari from hijacking the gesture)
+touchLayer.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  const t = e.touches[0];
+  startTouch(t.clientX, t.clientY);
+}, { passive: false });
+
+touchLayer.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  const t = e.touches[0];
+  moveTouch(t.clientX, t.clientY);
+}, { passive: false });
+
+touchLayer.addEventListener('touchend', (e) => {
+  if (e.touches.length === 0) endTouch();
+});
+touchLayer.addEventListener('touchcancel', endTouch);
+
+// Computer: mouse events
+touchLayer.addEventListener('mousedown', (e) => startTouch(e.clientX, e.clientY));
+window.addEventListener('mousemove', (e) => moveTouch(e.clientX, e.clientY));
+window.addEventListener('mouseup', endTouch);
 
 // Send every drawing flying outward from the point where the finger was
 function scatter(fx, fy) {
