@@ -200,9 +200,9 @@ function tick(now) {
   if (f.y + f.h > bottom) { f.y = bottom - f.h; f.vy = -Math.abs(f.vy); }
 
   // Waddle: rock side to side, with a little hop on each step
-  waddlePhase += dt * 100;                       // step speed
-  const tilt = Math.sin(waddlePhase) * 0.5;   // how far it rocks (radians)
-  const hop = Math.abs(Math.sin(waddlePhase)) * 100; // pixels lifted per step
+  waddlePhase += dt * 75;                       // step speed
+  const tilt = Math.sin(waddlePhase) * 0.4;   // how far it rocks (radians)
+  const hop = Math.abs(Math.sin(waddlePhase)) * 75; // pixels lifted per step
 
   const flip = f.vx < 0 ? -1 : 1;
   floater.style.transform =
