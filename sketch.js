@@ -199,25 +199,7 @@ function removeBackground() {
 
   ctx.putImageData(out, 0, 0);
 }
-  paper = Math.max(paper, 1);
 
-  // Slider sets where "ink" starts. Higher = picks up fainter lines.
-  const s = slider.value / 100;
-  const hi = 0.70 + 0.25 * s;
-  const lo = hi - 0.20;
-
-  for (let i = 0; i < src.length; i += 4) {
-    const lum = 0.299 * src[i] + 0.587 * src[i + 1] + 0.114 * src[i + 2];
-    const ratio = lum / paper;
-    const alpha = Math.min(1, Math.max(0, (hi - ratio) / (hi - lo)));
-
-    dst[i] = src[i];
-    dst[i + 1] = src[i + 1];
-    dst[i + 2] = src[i + 2];
-    dst[i + 3] = alpha * 255;
-  }
-
-  ctx.putImageData(out, 0, 0);
 
 // ---------- The waddling drawings ----------
 
