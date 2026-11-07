@@ -15,6 +15,8 @@ let sourceData = null; // the photo currently being edited
 // mode is 'start' (nothing yet), 'editing' (a photo is being tuned),
 // or 'floating' (the drawings are waddling around)
 let mode = 'start';
+const colorPicker = document.getElementById('colorPicker');
+let chosenColor = 'black'; // which marker color the next photo is scanned for
 let wipeOnLoad = false; // true when the next photo should clear all drawings
 
 // ---------- Buttons ----------
@@ -26,10 +28,19 @@ takeBtn.addEventListener('click', () => {
   fileInput.click();
 });
 
-// Adds another drawing and keeps the existing ones
+// Adds another drawing and keeps the existing ones.
+// First asks which color was used, then opens the camera.
 addBtn.addEventListener('click', () => {
+  colorPicker.hidden = false;
+});
+
+colorPicker.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-color]');
+  if (!btn) return;
+  chosenColor = btn.dataset.color;
+  colorPicker.hidden = true;
   wipeOnLoad = false;
-  fileInput.click();
+  fileInput.click(); // still inside the tap, so iOS allows the camera to open
 });
 
 doneBtn.addEventListener('click', addCreature);

@@ -96,6 +96,39 @@
       -webkit-touch-callout: none;
       z-index: 0;
     }
+    #colorPicker {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: calc(16px + env(safe-area-inset-top)) 16px 16px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      z-index: 4; /* above the controls so it can't be missed */
+    }
+    #colorPicker[hidden] { display: none; }
+    #colorPicker h2 {
+      margin: 0;
+      text-align: center;
+      color: black;
+      font-family: 'Marker Felt', 'Bradley Hand', 'Segoe Print', cursive;
+      font-size: clamp(16px, 5vw, 24px);
+      font-weight: normal;
+    }
+    #colorButtons {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      width: 100%;
+      max-width: 400px;
+    }
+    #colorButtons button {
+      padding: 12px 0;
+      font-size: 16px;
+    }
   </style>
 </head>
 <body>
@@ -113,6 +146,16 @@
       <input type="range" id="slider" min="1" max="100" value="50">
     </div>
 
+  <div id="colorPicker" hidden>
+    <h2>What color did you draw it?</h2>
+    <div id="colorButtons">
+      <button data-color="black" style="background:#000">Black</button>
+      <button data-color="red" style="background:#e53935">Red</button>
+      <button data-color="green" style="background:#43a047">Green</button>
+      <button data-color="blue" style="background:#1e88e5">Blue</button>
+    </div>
+  </div>
+
     <div id="buttons">
       <button id="takeBtn">📸 Take photo</button>
       <button id="doneBtn" hidden>✅ Done</button>
@@ -122,6 +165,6 @@
 
   <input type="file" id="fileInput" accept="image/*" capture="environment" hidden>
 
-  <script src="sketch.js?v=8"></script>
+  <script src="sketch.js?v=9"></script>
 </body>
 </html>
