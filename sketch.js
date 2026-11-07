@@ -102,29 +102,103 @@ fileInput.addEventListener('change', () => {
 
 // ---------- Removing the paper ----------
 
+// ---------- Ink colors ----------
+// Hue is the position on the color wheel (0-360). A pixel counts as this ink
+// if its hue is within `full` degrees of `center`, fading to nothing at `end`.
+// Tweak these if a marker is being missed or the wrong color sneaks in.
+const INK_HUES = {
+  red:   { center: 0,   full: 25, end: 45 },  // wraps around 360, handled below
+  green: { center: 130, full: 30, end: 55 },
+  blue:  { center: 225, full: 30, end: 55 }
+};
+
+function hueOf(r, g, b, max, d) {
+  let h;
+  if (max === r)      h = ((g - b) / d) % 6;
+  else if (max === g) h = (b - r) / d + 2;
+  else                h = (r - g) / d + 4;
+  h *= 60;
+  return h < 0 ? h + 360 : h;
+}
+
+function hueWeight(h, spec) {
+  let dist = Math.abs(h - spec.center);
+  if (dist > 180) dist = 360 - dist;     // shortest way around the wheel
+  if (dist <= spec.full) return 1;
+  if (dist >= spec.end) return 0;
+  return (spec.end - dist) / (spec.end - spec.full);
+}
+
+// ---------- Removing the paper ----------
+
 function removeBackground() {
   if (!sourceData) return;
 
   const src = sourceData.data;
   const out = ctx.createImageData(sourceData.width, sourceData.height);
   const dst = out.data;
-  const pixelCount = src.length / 4;
+  const s = slider.value / 100; // sensitivity: higher = picks up fainter lines
 
-  // Find how bright the paper is (90th percentile of brightness)
-  const hist = new Uint32Array(256);
-  for (let i = 0; i < src.length; i += 4) {
-    const lum = (0.299 * src[i] + 0.587 * src[i + 1] + 0.114 * src[i + 2]) | 0;
-    hist[lum]++;
-  }
-  let paper = 255;
-  let count = 0;
-  for (let v = 0; v < 256; v++) {
-    count += hist[v];
-    if (count >= pixelCount * 0.9) {
-      paper = v;
-      break;
+  if (chosenColor === 'black') {
+    // ----- Black: dark and not very colorful -----
+    const pixelCount = src.length / 4;
+
+    // Find how bright the paper is (90th percentile of brightness)
+    const hist = new Uint32Array(256);
+    for (let i = 0; i < src.length; i += 4) {
+      const lum = (0.299 * src[i] + 0.587 * src[i + 1] + 0.114 * src[i + 2]) | 0;
+      hist[lum]++;
+    }
+    let paper = 255;
+    let count = 0;
+    for (let v = 0; v < 256; v++) {
+      count += hist[v];
+      if (count >= pixelCount * 0.9) { paper = v; break; }
+    }
+    paper = Math.max(paper, 1);
+
+    const hi = 0.70 + 0.25 * s;
+    const lo = hi - 0.20;
+
+    for (let i = 0; i < src.length; i += 4) {
+      const r = src[i], g = src[i + 1], b = src[i + 2];
+      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      const darkness = Math.min(1, Math.max(0, (hi - lum / paper) / (hi - lo)));
+
+      // Dark red/green/blue ink is dark too, so ignore anything clearly colored
+      const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+      const notColored = 1 - Math.min(1, Math.max(0, (chroma - 35) / 40));
+
+      dst[i] = r; dst[i + 1] = g; dst[i + 2] = b;
+      dst[i + 3] = darkness * notColored * 255;
+    }
+  } else {
+    // ----- Red / green / blue: right hue and clearly colorful -----
+    const spec = INK_HUES[chosenColor];
+
+    // How colorful (max channel minus min channel) a pixel must be to count.
+    // White paper and black ink are both near 0, bright marker is 100+.
+    const chromaLo = 70 - 40 * s;
+    const chromaHi = chromaLo + 50;
+
+    for (let i = 0; i < src.length; i += 4) {
+      const r = src[i], g = src[i + 1], b = src[i + 2];
+      const max = Math.max(r, g, b);
+      const d = max - Math.min(r, g, b);
+
+      let alpha = 0;
+      if (d > chromaLo) {
+        const colorful = Math.min(1, (d - chromaLo) / (chromaHi - chromaLo));
+        alpha = colorful * hueWeight(hueOf(r, g, b, max, d), spec);
+      }
+
+      dst[i] = r; dst[i + 1] = g; dst[i + 2] = b;
+      dst[i + 3] = alpha * 255;
     }
   }
+
+  ctx.putImageData(out, 0, 0);
+}
   paper = Math.max(paper, 1);
 
   // Slider sets where "ink" starts. Higher = picks up fainter lines.
@@ -144,7 +218,7 @@ function removeBackground() {
   }
 
   ctx.putImageData(out, 0, 0);
-}
+
 // ---------- The waddling drawings ----------
 
 const touchLayer = document.getElementById('touchLayer');
