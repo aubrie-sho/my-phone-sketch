@@ -205,6 +205,39 @@ function removeBackground() {
 
 const touchLayer = document.getElementById('touchLayer');
 
+const world = document.getElementById('world');
+const WORLD_SCALE = 2;      // world is this many screens wide and tall
+const PAN_THRESHOLD = 10;   // px a finger must move before it counts as a drag
+const HOLD_MS = 150;        // how long you hold still before drawings are pulled in
+
+let worldW = 0, worldH = 0;
+let camX = 0, camY = 0;     // top-left of the screen, in world coordinates
+
+function clampCamera() {
+  camX = Math.min(Math.max(0, camX), Math.max(0, worldW - window.innerWidth));
+  camY = Math.min(Math.max(0, camY), Math.max(0, worldH - window.innerHeight));
+}
+
+function applyCamera() {
+  world.style.transform = `translate(${-camX}px, ${-camY}px)`;
+}
+
+function sizeWorld() {
+  worldW = window.innerWidth * WORLD_SCALE;
+  worldH = window.innerHeight * WORLD_SCALE;
+  world.style.width = worldW + 'px';
+  world.style.height = worldH + 'px';
+  clampCamera();
+  applyCamera();
+}
+
+sizeWorld();
+// Start in the middle of the world
+camX = (worldW - window.innerWidth) / 2;
+camY = (worldH - window.innerHeight) / 2;
+applyCamera();
+window.addEventListener('resize', sizeWorld);
+
 // Tweak these to change how the touch feels
 const ATTRACT_SPEED = 240; // top speed (px/s) when rushing toward your finger
 const ATTRACT_EASE = 4;    // how quickly they speed up toward it (higher = snappier)
@@ -215,28 +248,47 @@ const SETTLE = 1.5;        // how quickly they calm back to normal drift (higher
 let creatures = []; // every drawing on the screen
 let rafId = null;
 let lastTime = 0;
-let touch = { active: false, id: null, x: 0, y: 0 };
-
-// ----- Touch handling -----
+let touch = { active: false, mode: 'hold', x: 0, y: 0, sx: 0, sy: 0, lx: 0, ly: 0, t0: 0 };
+// x, y are in world coordinates. sx/sy is where the finger started and
+// lx/ly is where it was last, both in screen coordinates.
 
 function startTouch(x, y) {
   if (touch.active || mode !== 'floating') return;
   touch.active = true;
-  touch.x = x;
-  touch.y = y;
+  touch.mode = 'hold';
+  touch.sx = touch.lx = x;
+  touch.sy = touch.ly = y;
+  touch.x = x + camX;
+  touch.y = y + camY;
+  touch.t0 = performance.now();
 }
 
 function moveTouch(x, y) {
-  if (touch.active) {
-    touch.x = x;
-    touch.y = y;
+  if (!touch.active) return;
+
+  // Moved far enough from where it started: this is a drag, not a hold
+  if (touch.mode === 'hold' &&
+      Math.hypot(x - touch.sx, y - touch.sy) > PAN_THRESHOLD) {
+    touch.mode = 'pan';
   }
+
+  if (touch.mode === 'pan') {
+    camX -= x - touch.lx;   // drag the world with your finger
+    camY -= y - touch.ly;
+    clampCamera();
+    applyCamera();
+  } else {
+    touch.x = x + camX;
+    touch.y = y + camY;
+  }
+  touch.lx = x;
+  touch.ly = y;
 }
 
 function endTouch() {
   if (!touch.active) return;
   touch.active = false;
-  scatter(touch.x, touch.y);
+  if (touch.mode === 'hold') scatter(touch.x, touch.y); // only scatter after a hold
 }
 
 // Phone: touch events (preventDefault stops Safari from hijacking the gesture)
@@ -326,18 +378,18 @@ function addCreature() {
   const ch = bh * scale;
   el.style.width = cw + 'px';
   el.style.height = ch + 'px';
-  document.body.appendChild(el);
+  world.appendChild(el);
 
   // 4. Give it its own position, drift direction and waddle rhythm
-  const bottom = buttonsRow.getBoundingClientRect().top - 8;
+  const viewBottom = buttonsRow.getBoundingClientRect().top - 8;
   const angle = Math.random() * Math.PI * 2;
   const speed = 50 + Math.random() * 40; // its normal "cruising" speed (px/s)
   creatures.push({
     el: el,
     w: cw,
     h: ch,
-    x: (window.innerWidth - cw) / 2,
-    y: (bottom - ch) / 2,
+    x: camX + (window.innerWidth - cw) / 2,
+    y: camY + (viewBottom - ch) / 2,
     vx: Math.cos(angle) * speed,
     vy: Math.sin(angle) * speed,
     cruise: speed,                      // what it settles back to after a scatter
@@ -372,12 +424,12 @@ function tick(now) {
   const dt = Math.min(0.033, (now - lastTime) / 1000);
   lastTime = now;
 
-  const W = window.innerWidth;
-  // Floor is just above the button row, so it stays put when the slider appears
-  const bottom = buttonsRow.getBoundingClientRect().top - 8;
+  const W = worldW;
+  // Floor of the world, leaving room for the button row at the bottom of the screen
+  const bottom = worldH - (window.innerHeight - buttonsRow.getBoundingClientRect().top) - 8;
 
   for (const c of creatures) {
-    if (touch.active) {
+      if (touch.active && touch.mode === 'hold' && now - touch.t0 > HOLD_MS) {
       // Finger is down: steer toward it, slowing down as they get close
       const dx = touch.x - (c.x + c.w / 2);
       const dy = touch.y - (c.y + c.h / 2);

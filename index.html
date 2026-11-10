@@ -8,7 +8,7 @@
     html, body {
       margin: 0;
       height: 100%;
-      background: #ffb6c1 url('background.png') center / cover no-repeat;
+      background: #ffb6c1;
       overflow: hidden;
       font-family: -apple-system, sans-serif;
     }
@@ -21,12 +21,21 @@
       z-index: 2;          /* sits above the waddling drawings while you edit */
     }
     .creature {
-      position: fixed;
+      position: absolute;
       top: 0;
       left: 0;
       transform-origin: 50% 100%; /* pivot from the "feet" */
       pointer-events: none;
       z-index: 1;
+    }
+    #world {
+      position: absolute;
+      top: 0;
+      left: 0;
+      background: #ffb6c1 url('background.png') center / cover no-repeat;
+      pointer-events: none; /* touches pass through to touchLayer */
+      z-index: 0;
+      will-change: transform;
     }
     #hint {
       position: fixed;
@@ -133,6 +142,7 @@
 </head>
 <body>
   <div id="touchLayer"></div>
+  <div id="world"></div>
   <canvas id="drawing"></canvas>
 
   <div id="hint">
@@ -165,6 +175,6 @@
 
   <input type="file" id="fileInput" accept="image/*" capture="environment" hidden>
 
-  <script src="sketch.js?v=11"></script>
+  <script src="sketch.js?v=12"></script>
 </body>
 </html>
