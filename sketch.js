@@ -55,6 +55,7 @@ function enterEditMode() {
   doneBtn.hidden = false;
   addBtn.hidden = true;
   takeBtn.textContent = '🔄 Retake';
+  tools.hidden = true;
 }
 
 function enterFloatMode() {
@@ -64,6 +65,7 @@ function enterFloatMode() {
   doneBtn.hidden = true;
   addBtn.hidden = false;
   takeBtn.textContent = '🔄 Start over';
+  tools.hidden = false;
 }
 
 // ---------- Taking the photo ----------
@@ -245,6 +247,11 @@ const BURST_MIN = 380;     // scatter speed range (px/s) when you let go
 const BURST_MAX = 600;
 const SETTLE = 1.5;        // how quickly they calm back to normal drift (higher = faster)
 
+const JUMP_TIME = 0.8;   // seconds for the two jumps
+const JUMP_H = 40;       // how high each jump goes (px)
+const HEART_TIME = 1.4;  // how long the heart floats before fading
+const PET_COOLDOWN = 2000; // ms before the same drawing can be hearted again
+
 let creatures = []; // every drawing on the screen
 let rafId = null;
 let lastTime = 0;
@@ -394,7 +401,11 @@ function addCreature() {
     vy: Math.sin(angle) * speed,
     cruise: speed,                      // what it settles back to after a scatter
     phase: Math.random() * Math.PI * 2, // so they don't all waddle in sync
-    step: 8 + Math.random() * 3         // each one has its own step speed
+    step: 8 + Math.random() * 3  ,       // each one has its own step speed
+    jumpT: -1,            // -1 = not jumping
+    lastPet: -Infinity,
+    heartEl: null,
+    heartT: 0,
   });
 
   enterFloatMode();
@@ -407,7 +418,10 @@ function addCreature() {
 }
 
 function wipeCreatures() {
-  for (const c of creatures) c.el.remove();
+  for (const c of creatures) {
+    c.el.remove();
+    if (c.heartEl) c.heartEl.remove();
+  }
   creatures = [];
   if (rafId) cancelAnimationFrame(rafId);
   rafId = null;
@@ -462,11 +476,92 @@ function tick(now) {
     c.phase += dt * c.step * excite;
 
     const tilt = Math.sin(c.phase) * 0.22;
-    const hop = Math.abs(Math.sin(c.phase)) * 8;
+        // Two quick jumps when petted (the abs of one sine wave makes two humps)
+    let jumpLift = 0;
+    if (c.jumpT >= 0) {
+      c.jumpT += dt;
+      if (c.jumpT >= JUMP_TIME) c.jumpT = -1;
+      else jumpLift = Math.abs(Math.sin(c.jumpT / JUMP_TIME * Math.PI * 2)) * JUMP_H;
+    }
+    const hop = Math.abs(Math.sin(c.phase)) * 8 + jumpLift;
 
     c.el.style.transform =
       `translate(${c.x}px, ${c.y - hop}px) rotate(${tilt}rad)`;
+
+        // The heart rises above the drawing and fades out
+    if (c.heartEl) {
+      c.heartT += dt;
+      const p = c.heartT / HEART_TIME;
+      if (p >= 1) {
+        c.heartEl.remove();
+        c.heartEl = null;
+      } else {
+        c.heartEl.style.opacity = 1 - p * p;
+        c.heartEl.style.transform =
+          `translate(${c.x + c.w / 2}px, ${c.y - hop - 6 - p * 40}px) translate(-50%, -100%)`;
+      }
+    }
   }
 
   rafId = requestAnimationFrame(tick);
+}
+
+// ---------- Tools (drag onto a drawing) ----------
+
+const tools = document.getElementById('tools');
+let ghost = null;
+
+tools.addEventListener('pointerdown', (e) => {
+  const tool = e.target.closest('.tool');
+  if (!tool || mode !== 'floating' || ghost) return;
+  e.preventDefault();
+
+  tool.setPointerCapture(e.pointerId); // keep getting events even off the button
+  tool.classList.add('dragging');
+
+  ghost = tool.cloneNode(true);
+  ghost.classList.remove('dragging');
+  ghost.classList.add('tool-ghost');
+  document.body.appendChild(ghost);
+  moveGhost(e.clientX, e.clientY, tool.dataset.tool);
+
+  const onMove = (ev) => moveGhost(ev.clientX, ev.clientY, tool.dataset.tool);
+  const onEnd = () => {
+    tool.removeEventListener('pointermove', onMove);
+    tool.removeEventListener('pointerup', onEnd);
+    tool.removeEventListener('pointercancel', onEnd);
+    tool.classList.remove('dragging');
+    if (ghost) ghost.remove();
+    ghost = null;
+  };
+  tool.addEventListener('pointermove', onMove);
+  tool.addEventListener('pointerup', onEnd);
+  tool.addEventListener('pointercancel', onEnd);
+});
+
+function moveGhost(x, y, toolName) {
+  ghost.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+
+  // Is the ghost over a drawing? (creature positions are in world coords, so shift by the camera)
+  for (const c of creatures) {
+    const left = c.x - camX, top = c.y - camY;
+    if (x >= left && x <= left + c.w && y >= top && y <= top + c.h) {
+      if (toolName === 'hand') pet(c);
+    }
+  }
+}
+
+function pet(c) {
+  const now = performance.now();
+  if (now - c.lastPet < PET_COOLDOWN) return;
+  c.lastPet = now;
+
+  c.jumpT = 0; // tick() runs the two jumps
+
+  if (c.heartEl) c.heartEl.remove();
+  c.heartEl = document.createElement('div');
+  c.heartEl.className = 'heart';
+  c.heartEl.textContent = 'heart'; // swap for a sprite later
+  world.appendChild(c.heartEl);
+  c.heartT = 0;
 }

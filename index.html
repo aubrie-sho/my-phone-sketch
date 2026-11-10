@@ -145,12 +145,55 @@
       padding: 10px 0;
       font-size: 16px;
     }
+    #tools {
+      position: fixed;
+      left: calc(12px + env(safe-area-inset-left));
+      top: calc(12px + env(safe-area-inset-top));
+      display: flex;
+      flex-direction: column;
+      gap: 12px; /* the 2 future interactions will stack below the hand */
+      z-index: 3;
+    }
+    #tools[hidden] { display: none; }
+    .tool {
+      font-size: 16px;
+      padding: 10px 18px;
+      border-radius: 10px;
+      background: #ff69b4;
+      color: white;
+      text-align: center;
+      touch-action: none; /* so dragging doesn't scroll or pan the page */
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+    .tool.dragging { opacity: 0.4; }  /* the slot dims while you carry its ghost */
+    .tool-ghost {
+      position: fixed;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      z-index: 5;
+    }
+    .heart {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      z-index: 1;
+      color: #e0245e;
+      font-family: 'Marker Felt', 'Bradley Hand', 'Segoe Print', cursive;
+      font-size: 20px;
+    }
   </style>
 </head>
 <body>
   <div id="touchLayer"></div>
   <div id="world"></div>
   <canvas id="drawing"></canvas>
+  <div id="tools" hidden>
+  <div class="tool" data-tool="hand">hand</div>
+  </div>
 
   <div id="hint">
     <img src="stickynote.png" alt="">
@@ -182,6 +225,6 @@
 
   <input type="file" id="fileInput" accept="image/*" capture="environment" hidden>
 
-  <script src="sketch.js?v=13"></script>
+  <script src="sketch.js?v=14"></script>
 </body>
 </html>
