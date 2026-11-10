@@ -241,10 +241,6 @@ window.addEventListener('resize', sizeWorld);
 // Tweak these to change how the touch feels
 const ATTRACT_SPEED = 240; // top speed (px/s) when rushing toward your finger
 const ATTRACT_EASE = 4;    // how quickly they speed up toward it (higher = snappier)
-const SPEED_MIN = 25;      // slowest possible base speed (px/s)
-const SPEED_RANGE = 150;   // how much faster the fastest ones can be
-const DASH_CHANCE = 0.2;   // odds a new mood is a fast dash
-const PAUSE_CHANCE = 0.2;  // odds a new mood is stopping to rest
 const BURST_MIN = 380;     // scatter speed range (px/s) when you let go
 const BURST_MAX = 600;
 const SETTLE = 1.5;        // how quickly they calm back to normal drift (higher = faster)
@@ -387,7 +383,7 @@ function addCreature() {
   // 4. Give it its own position, drift direction and waddle rhythm
   const viewBottom = buttonsRow.getBoundingClientRect().top - 8;
   const angle = Math.random() * Math.PI * 2;
-  const speed = SPEED_MIN + Math.pow(Math.random(), 1.5) * SPEED_RANGE; // mostly slowish, a few speedy
+  const speed = 50 + Math.random() * 40; // its normal "cruising" speed (px/s)
   creatures.push({
     el: el,
     w: cw,
@@ -396,19 +392,9 @@ function addCreature() {
     y: camY + (viewBottom - ch) / 2,
     vx: Math.cos(angle) * speed,
     vy: Math.sin(angle) * speed,
-    base: speed,                         // its personal normal speed
-    cruise: speed,                       // current target speed (base x mood)
-    speedMul: 1,
-    moodTimer: Math.random() * 2,        // time until it picks a new mood
-    turn: 0,                             // how fast it is curving right now (rad/s)
-    turnTarget: 0,
-    windy: 0.3 + Math.random() * 1.7,    // how much this one likes to wander
-    hopAmt: 3 + Math.random() * 14,      // its normal waddle hop height
-    boingAmt: 8 + Math.random() * 26,    // how big it jumps when it hits a wall
-    boing: 0,
-    tiltAmt: 0.1 + Math.random() * 0.3,
-    phase: Math.random() * Math.PI * 2,
-    step: 5 + Math.random() * 9
+    cruise: speed,                      // what it settles back to after a scatter
+    phase: Math.random() * Math.PI * 2, // so they don't all waddle in sync
+    step: 8 + Math.random() * 3         // each one has its own step speed
   });
 
   enterFloatMode();
@@ -425,20 +411,6 @@ function wipeCreatures() {
   creatures = [];
   if (rafId) cancelAnimationFrame(rafId);
   rafId = null;
-}
-
-// Called when a drawing hits a wall: it comes off at a slightly new angle and speed
-function jitter(c) {
-  const a = (Math.random() - 0.5) * 1.0; // up to about 30 degrees either way
-  const cos = Math.cos(a), sin = Math.sin(a);
-  const vx = c.vx * cos - c.vy * sin;
-  const vy = c.vx * sin + c.vy * cos;
-  const boost = 0.7 + Math.random() * 0.9;
-  c.vx = vx * boost;
-  c.vy = vy * boost;
-  // Its normal speed also drifts a bit with each bounce, so personalities change over time
-  c.base = Math.min(SPEED_MIN + SPEED_RANGE, Math.max(SPEED_MIN, c.base * (0.75 + Math.random() * 0.6)));
-  c.boing = 1; // triggers an extra hop
 }
 
 // ----- The animation loop -----
@@ -466,29 +438,8 @@ function tick(now) {
       const ease = Math.min(1, ATTRACT_EASE * dt);
       c.vx += (dx / dist * want - c.vx) * ease;
       c.vy += (dy / dist * want - c.vy) * ease;
-        } else {
-      // Pick a new mood every so often: rest, dash, or stroll
-      c.moodTimer -= dt;
-      if (c.moodTimer <= 0) {
-        const r = Math.random();
-        if (r < PAUSE_CHANCE)                  c.speedMul = 0.05;
-        else if (r < PAUSE_CHANCE + DASH_CHANCE) c.speedMul = 2.2 + Math.random() * 1.3;
-        else                                   c.speedMul = 0.6 + Math.random() * 0.8;
-        c.moodTimer = 0.8 + Math.random() * 3;
-        c.turnTarget = (Math.random() - 0.5) * c.windy * 3;
-      }
-      c.cruise = c.base * c.speedMul;
-
-      // Curve gently toward this mood's turn rate
-      c.turn += (c.turnTarget - c.turn) * Math.min(1, 2 * dt);
-      const a = c.turn * dt;
-      const cos = Math.cos(a), sin = Math.sin(a);
-      const nvx = c.vx * cos - c.vy * sin;
-      const nvy = c.vx * sin + c.vy * cos;
-      c.vx = nvx;
-      c.vy = nvy;
-
-      // Ease toward the target speed, keeping the direction
+    } else {
+      // Finger is up: calm back down to normal drift speed, keeping the direction
       const sp = Math.hypot(c.vx, c.vy) || 1;
       const newSp = c.cruise + (sp - c.cruise) * Math.exp(-SETTLE * dt);
       c.vx *= newSp / sp;
@@ -500,23 +451,22 @@ function tick(now) {
     c.y += c.vy * dt;
 
     // Bounce off the edges
-    if (c.x < 0)           { c.x = 0;           c.vx = Math.abs(c.vx);  jitter(c); c.vx = Math.abs(c.vx); }
-    if (c.x + c.w > W)     { c.x = W - c.w;     c.vx = -Math.abs(c.vx); jitter(c); c.vx = -Math.abs(c.vx); }
-    if (c.y < 0)           { c.y = 0;           c.vy = Math.abs(c.vy);  jitter(c); c.vy = Math.abs(c.vy); }
-    if (c.y + c.h > bottom){ c.y = bottom - c.h; c.vy = -Math.abs(c.vy); jitter(c); c.vy = -Math.abs(c.vy); }
+    if (c.x < 0) { c.x = 0; c.vx = Math.abs(c.vx); }
+    if (c.x + c.w > W) { c.x = W - c.w; c.vx = -Math.abs(c.vx); }
+    if (c.y < 0) { c.y = 0; c.vy = Math.abs(c.vy); }
+    if (c.y + c.h > bottom) { c.y = bottom - c.h; c.vy = -Math.abs(c.vy); }
 
-    // Waddle in time with how fast it's moving (slow when resting, quick when dashing)
+    // Waddle faster when moving faster
     const speedNow = Math.hypot(c.vx, c.vy);
-    const excite = Math.min(2.5, Math.max(0.3, speedNow / c.base));
+    const excite = Math.min(2.5, Math.max(1, speedNow / c.cruise));
     c.phase += dt * c.step * excite;
-    c.boing = Math.max(0, c.boing - dt * 3);
 
-    const tilt = Math.sin(c.phase) * c.tiltAmt;
-    const hop = Math.abs(Math.sin(c.phase)) * c.hopAmt + c.boing * c.boingAmt;
+    const tilt = Math.sin(c.phase) * 0.22;
+    const hop = Math.abs(Math.sin(c.phase)) * 8;
 
     c.el.style.transform =
       `translate(${c.x}px, ${c.y - hop}px) rotate(${tilt}rad)`;
+  }
 
   rafId = requestAnimationFrame(tick);
-
-}}
+}
