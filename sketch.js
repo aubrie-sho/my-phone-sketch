@@ -256,6 +256,10 @@ const FOOD_RADIUS = 180;  // px: how close the food must be to a drawing to attr
 const FOOD_SPEED = 260;   // top speed (px/s) when rushing to the food
 const FOOD_EASE = 5;      // how quickly they speed up toward it
 
+const BROOM_RADIUS = 160;  // px: how close the broom must be to scare a drawing
+const BROOM_SPEED = 300;   // top speed (px/s) when fleeing
+const BROOM_EASE = 6;      // how quickly they speed up away from it
+
 let creatures = []; // every drawing on the screen
 let rafId = null;
 let lastTime = 0;
@@ -263,6 +267,7 @@ let touch = { active: false, mode: 'hold', x: 0, y: 0, sx: 0, sy: 0, lx: 0, ly: 
 let food = { active: false, x: 0, y: 0 }; // x, y in world coordinates
 // x, y are in world coordinates. sx/sy is where the finger started and
 // lx/ly is where it was last, both in screen coordinates.
+let broom = { active: false, x: 0, y: 0 }; // x, y in world coordinates
 
 function startTouch(x, y) {
   if (touch.active || mode !== 'floating') return;
@@ -448,10 +453,14 @@ function tick(now) {
   const bottom = worldH - (window.innerHeight - buttonsRow.getBoundingClientRect().top) - 8;
 
   for (const c of creatures) {
-          // Distance from this drawing to the food (if it's being dragged)
+    // Distance from this drawing to the food and to the broom (if being dragged)
     const fdx = food.x - (c.x + c.w / 2);
     const fdy = food.y - (c.y + c.h / 2);
     const fdist = Math.hypot(fdx, fdy) || 1;
+
+    const bdx = (c.x + c.w / 2) - broom.x; // points away from the broom
+    const bdy = (c.y + c.h / 2) - broom.y;
+    const bdist = Math.hypot(bdx, bdy) || 1;
 
     if (food.active && fdist < FOOD_RADIUS) {
       // Food is close: rush toward it, slowing down as they arrive
@@ -459,6 +468,11 @@ function tick(now) {
       const ease = Math.min(1, FOOD_EASE * dt);
       c.vx += (fdx / fdist * want - c.vx) * ease;
       c.vy += (fdy / fdist * want - c.vy) * ease;
+    } else if (broom.active && bdist < BROOM_RADIUS) {
+      // Broom is close: run straight away from it
+      const ease = Math.min(1, BROOM_EASE * dt);
+      c.vx += (bdx / bdist * BROOM_SPEED - c.vx) * ease;
+      c.vy += (bdy / bdist * BROOM_SPEED - c.vy) * ease;
     } else if (touch.active && touch.mode === 'hold' && now - touch.t0 > HOLD_MS) {
       // Finger is down: steer toward it, slowing down as they get close
       const dx = touch.x - (c.x + c.w / 2);
@@ -544,6 +558,7 @@ tools.addEventListener('pointerdown', (e) => {
   const onMove = (ev) => moveGhost(ev.clientX, ev.clientY, tool.dataset.tool);
   const onEnd = () => {
     food.active = false;
+    broom.active = false;
     tool.removeEventListener('pointermove', onMove);
     tool.removeEventListener('pointerup', onEnd);
     tool.removeEventListener('pointercancel', onEnd);
@@ -563,6 +578,13 @@ function moveGhost(x, y, toolName) {
     food.active = true;
     food.x = x + camX;
     food.y = y + camY;
+    return;
+  }
+
+    if (toolName === 'broom') {
+    broom.active = true;
+    broom.x = x + camX;
+    broom.y = y + camY;
     return;
   }
 
