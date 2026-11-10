@@ -252,10 +252,15 @@ const JUMP_H = 40;       // how high each jump goes (px)
 const HEART_TIME = 1.4;  // how long the heart floats before fading
 const PET_COOLDOWN = 2000; // ms before the same drawing can be hearted again
 
+const FOOD_RADIUS = 180;  // px: how close the food must be to a drawing to attract it
+const FOOD_SPEED = 260;   // top speed (px/s) when rushing to the food
+const FOOD_EASE = 5;      // how quickly they speed up toward it
+
 let creatures = []; // every drawing on the screen
 let rafId = null;
 let lastTime = 0;
 let touch = { active: false, mode: 'hold', x: 0, y: 0, sx: 0, sy: 0, lx: 0, ly: 0, t0: 0 };
+let food = { active: false, x: 0, y: 0 }; // x, y in world coordinates
 // x, y are in world coordinates. sx/sy is where the finger started and
 // lx/ly is where it was last, both in screen coordinates.
 
@@ -443,7 +448,18 @@ function tick(now) {
   const bottom = worldH - (window.innerHeight - buttonsRow.getBoundingClientRect().top) - 8;
 
   for (const c of creatures) {
-      if (touch.active && touch.mode === 'hold' && now - touch.t0 > HOLD_MS) {
+          // Distance from this drawing to the food (if it's being dragged)
+    const fdx = food.x - (c.x + c.w / 2);
+    const fdy = food.y - (c.y + c.h / 2);
+    const fdist = Math.hypot(fdx, fdy) || 1;
+
+    if (food.active && fdist < FOOD_RADIUS) {
+      // Food is close: rush toward it, slowing down as they arrive
+      const want = Math.min(FOOD_SPEED, fdist * 2);
+      const ease = Math.min(1, FOOD_EASE * dt);
+      c.vx += (fdx / fdist * want - c.vx) * ease;
+      c.vy += (fdy / fdist * want - c.vy) * ease;
+    } else if (touch.active && touch.mode === 'hold' && now - touch.t0 > HOLD_MS) {
       // Finger is down: steer toward it, slowing down as they get close
       const dx = touch.x - (c.x + c.w / 2);
       const dy = touch.y - (c.y + c.h / 2);
@@ -527,6 +543,7 @@ tools.addEventListener('pointerdown', (e) => {
 
   const onMove = (ev) => moveGhost(ev.clientX, ev.clientY, tool.dataset.tool);
   const onEnd = () => {
+    food.active = false;
     tool.removeEventListener('pointermove', onMove);
     tool.removeEventListener('pointerup', onEnd);
     tool.removeEventListener('pointercancel', onEnd);
@@ -541,6 +558,13 @@ tools.addEventListener('pointerdown', (e) => {
 
 function moveGhost(x, y, toolName) {
   ghost.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+
+  if (toolName === 'food') {
+    food.active = true;
+    food.x = x + camX;
+    food.y = y + camY;
+    return;
+  }
 
   // Is the ghost over a drawing? (creature positions are in world coords, so shift by the camera)
   for (const c of creatures) {
