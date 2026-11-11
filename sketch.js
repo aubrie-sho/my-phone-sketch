@@ -8,6 +8,7 @@ const hint = document.getElementById('hint');
 const buttonsRow = document.getElementById('buttons');
 const canvas = document.getElementById('drawing');
 const ctx = canvas.getContext('2d', { willReadFrequently: true });
+const controls = document.getElementById('controls');
 
 const MAX_SIZE = 1400; // shrink big phone photos so processing stays fast
 let sourceData = null; // the photo currently being edited
@@ -74,6 +75,7 @@ fileInput.addEventListener('change', () => {
   const file = fileInput.files[0];
   if (!file) return;
 
+  setTimeout(applyOrientation, 300); // Safari can report the new size late
   const url = URL.createObjectURL(file);
   const img = new Image();
 
@@ -215,9 +217,48 @@ const HOLD_MS = 150;        // how long you hold still before drawings are pulle
 let worldW = 0, worldH = 0;
 let camX = 0, camY = 0;     // top-left of the screen, in world coordinates
 
+// ---------- Keeping the layout sideways ----------
+// If the phone reports portrait (e.g. after the camera), rotate the whole page 90 degrees.
+// If the interface looks upside down, change this to 'ccw'.
+const ROTATE_DIR = 'cw';
+let rotated = false;
+
+// The size of the screen as the layout sees it (swapped when rotated)
+function layoutW() { return rotated ? window.innerHeight : window.innerWidth; }
+function layoutH() { return rotated ? window.innerWidth : window.innerHeight; }
+
+// Turns a screen touch position into a layout position
+function toLayout(cx, cy) {
+  if (!rotated) return { x: cx, y: cy };
+  if (ROTATE_DIR === 'cw') return { x: cy, y: window.innerWidth - cx };
+  return { x: window.innerHeight - cy, y: cx };
+}
+
+// Top edge of the button row, in layout coordinates (not affected by rotation)
+function buttonsTop() {
+  const pb = parseFloat(getComputedStyle(controls).paddingBottom) || 0;
+  return layoutH() - pb - buttonsRow.offsetHeight;
+}
+
+function applyOrientation() {
+  rotated = window.innerHeight > window.innerWidth;
+  const b = document.body;
+  b.classList.toggle('rotated', rotated);
+  if (rotated) {
+    b.style.width = window.innerHeight + 'px';
+    b.style.height = window.innerWidth + 'px';
+    b.style.transform = ROTATE_DIR === 'cw'
+      ? `translateX(${window.innerWidth}px) rotate(90deg)`
+      : `translateY(${window.innerHeight}px) rotate(-90deg)`;
+  } else {
+    b.style.width = b.style.height = b.style.transform = '';
+  }
+  sizeWorld();
+}
+
 function clampCamera() {
-  camX = Math.min(Math.max(0, camX), Math.max(0, worldW - window.innerWidth));
-  camY = Math.min(Math.max(0, camY), Math.max(0, worldH - window.innerHeight));
+  camX = Math.min(Math.max(0, camX), Math.max(0, worldW - layoutW()));
+  camY = Math.min(Math.max(0, camY), Math.max(0, worldH - layoutH()));
 }
 
 function applyCamera() {
@@ -225,8 +266,8 @@ function applyCamera() {
 }
 
 function sizeWorld() {
-  worldW = window.innerWidth * WORLD_SCALE;
-  worldH = window.innerHeight * WORLD_SCALE;
+  worldW = layoutW() * WORLD_SCALE;
+  worldH = layoutH() * WORLD_SCALE;
   world.style.width = worldW + 'px';
   world.style.height = worldH + 'px';
   clampCamera();
@@ -234,11 +275,16 @@ function sizeWorld() {
 }
 
 sizeWorld();
+applyOrientation();
 // Start in the middle of the world
-camX = (worldW - window.innerWidth) / 2;
-camY = (worldH - window.innerHeight) / 2;
+camX = (worldW - layoutW()) / 2;
+camY = (worldH - layoutH()) / 2;
 applyCamera();
-window.addEventListener('resize', sizeWorld);
+
+window.addEventListener('resize', applyOrientation);
+window.addEventListener('orientationchange', () => setTimeout(applyOrientation, 200));
+window.addEventListener('pageshow', applyOrientation);
+document.addEventListener('visibilitychange', applyOrientation);
 
 // Tweak these to change how the touch feels
 const ATTRACT_SPEED = 240; // top speed (px/s) when rushing toward your finger
@@ -312,13 +358,15 @@ function endTouch() {
 touchLayer.addEventListener('touchstart', (e) => {
   e.preventDefault();
   const t = e.touches[0];
-  startTouch(t.clientX, t.clientY);
+  const p = toLayout(t.clientX, t.clientY);
+  startTouch(p.x, p.y);
 }, { passive: false });
 
 touchLayer.addEventListener('touchmove', (e) => {
   e.preventDefault();
   const t = e.touches[0];
-  moveTouch(t.clientX, t.clientY);
+  const p = toLayout(t.clientX, t.clientY);
+  moveTouch(p.x, p.y);
 }, { passive: false });
 
 touchLayer.addEventListener('touchend', (e) => {
@@ -327,8 +375,8 @@ touchLayer.addEventListener('touchend', (e) => {
 touchLayer.addEventListener('touchcancel', endTouch);
 
 // Computer: mouse events
-touchLayer.addEventListener('mousedown', (e) => startTouch(e.clientX, e.clientY));
-window.addEventListener('mousemove', (e) => moveTouch(e.clientX, e.clientY));
+touchLayer.addEventListener('mousedown', (e) => { const p = toLayout(e.clientX, e.clientY); startTouch(p.x, p.y); });
+window.addEventListener('mousemove', (e) => { const p = toLayout(e.clientX, e.clientY); moveTouch(p.x, p.y); });
 window.addEventListener('mouseup', endTouch);
 
 // Send every drawing flying outward from the point where the finger was
@@ -389,7 +437,7 @@ function addCreature() {
   el.getContext('2d').drawImage(canvas, minX, minY, bw, bh, 0, 0, bw, bh);
 
   // 3. Size it for the screen
-  const target = Math.min(window.innerWidth, window.innerHeight) * 0.3;
+  const target = Math.min(layoutW(), layoutH()) * 0.3;
   const scale = target / Math.max(bw, bh);
   const cw = bw * scale;
   const ch = bh * scale;
@@ -398,14 +446,14 @@ function addCreature() {
   world.appendChild(el);
 
   // 4. Give it its own position, drift direction and waddle rhythm
-  const viewBottom = buttonsRow.getBoundingClientRect().top - 8;
+  const viewBottom = buttonsTop() - 8;
   const angle = Math.random() * Math.PI * 2;
   const speed = 50 + Math.random() * 40; // its normal "cruising" speed (px/s)
   creatures.push({
     el: el,
     w: cw,
     h: ch,
-    x: camX + (window.innerWidth - cw) / 2,
+    x: camX + (layoutW() - cw) / 2,
     y: camY + (viewBottom - ch) / 2,
     vx: Math.cos(angle) * speed,
     vy: Math.sin(angle) * speed,
@@ -450,7 +498,7 @@ function tick(now) {
 
   const W = worldW;
   // Floor of the world, leaving room for the button row at the bottom of the screen
-  const bottom = worldH - (window.innerHeight - buttonsRow.getBoundingClientRect().top) - 8;
+  const bottom = worldH - (layoutH() - buttonsTop()) - 8;
 
   for (const c of creatures) {
     // Distance from this drawing to the food and to the broom (if being dragged)
@@ -553,9 +601,13 @@ tools.addEventListener('pointerdown', (e) => {
   ghost.classList.remove('dragging');
   ghost.classList.add('tool-ghost');
   document.body.appendChild(ghost);
-  moveGhost(e.clientX, e.clientY, tool.dataset.tool);
+  const p0 = toLayout(e.clientX, e.clientY);
+  moveGhost(p0.x, p0.y, tool.dataset.tool);
 
-  const onMove = (ev) => moveGhost(ev.clientX, ev.clientY, tool.dataset.tool);
+  const onMove = (ev) => {
+    const p = toLayout(ev.clientX, ev.clientY);
+    moveGhost(p.x, p.y, tool.dataset.tool);
+  };
   const onEnd = () => {
     food.active = false;
     broom.active = false;

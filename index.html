@@ -12,6 +12,21 @@
       overflow: hidden;
       font-family: -apple-system, sans-serif;
     }
+    html { background: #ffb6c1; }
+
+    /* When the phone reports portrait, JS sets this class and rotates the whole page */
+    body.rotated {
+      position: fixed;
+      top: 0;
+      left: 0;
+      transform-origin: 0 0;
+    }
+    /* Safe-area insets refer to the portrait screen, so use plain padding while rotated */
+    body.rotated #controls { padding: 10px 16px; }
+    body.rotated #tools { left: 12px; top: 12px; }
+    body.rotated #colorPicker { padding: 10px 16px; }
+    body.rotated #hint { width: min(80vh, 70vw, 360px); }
+    
     #drawing {
       position: fixed;
       inset: 0;
