@@ -9,6 +9,7 @@ const buttonsRow = document.getElementById('buttons');
 const canvas = document.getElementById('drawing');
 const ctx = canvas.getContext('2d', { willReadFrequently: true });
 const controls = document.getElementById('controls');
+const instructions = document.getElementById('instructions');
 
 const MAX_SIZE = 1400; // shrink big phone photos so processing stays fast
 let sourceData = null; // the photo currently being edited
@@ -63,6 +64,7 @@ function enterEditMode() {
   addBtn.hidden = true;
   takeBtn.textContent = '🔄 Retake';
   tools.hidden = true;
+  instructions.hidden = true;
 }
 
 function enterFloatMode() {
@@ -75,6 +77,7 @@ function enterFloatMode() {
   tools.hidden = false;
   rotateBtn.hidden = true;
   takeBtn.hidden = creatures.length === 0; // "Start over" only shows once there's something to wipe
+  instructions.hidden = false;
 }
 
 // ---------- Taking the photo ----------
