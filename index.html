@@ -25,8 +25,8 @@
     body.rotated #controls { padding: 10px 16px; }
     body.rotated #tools { left: 12px; top: 12px; }
     body.rotated #colorPicker { padding: 10px 16px; }
-    body.rotated #hint { width: min(80vh, 70vw, 360px); }
-    
+
+
     #drawing {
       position: fixed;
       inset: 0;
@@ -52,33 +52,7 @@
       z-index: 0;
       will-change: transform;
     }
-    #hint {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: min(80vw, 70vh, 360px);
-      pointer-events: none; /* taps pass through to the page */
-      z-index: 2;
-    }
-    #hint img {
-      width: 100%;
-      display: block;
-    }
-    #hint p {
-      position: absolute;
-      inset: 0;
-      margin: 0;
-      padding: 14%;
-      box-sizing: border-box;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      color: black;
-      font-family: 'Marker Felt', 'Bradley Hand', 'Segoe Print', cursive;
-      font-size: clamp(16px, 5vw, 24px);
-    }
+
     #controls {
       position: fixed;
       left: 0;
@@ -212,11 +186,6 @@
     <div class="tool" data-tool="broom">broom</div>
   </div>
 
-  <div id="hint">
-    <img src="stickynote.png" alt="">
-    <p>Take a picture of a drawing on white paper, then watch it come to life!</p>
-  </div>
-
   <div id="controls">
     <div id="sliderWrap">
       Sensitivity (raise it if lines are missing, lower it if the paper shows up)
@@ -236,12 +205,13 @@
     <div id="buttons">
       <button id="takeBtn">📸 Take photo</button>
       <button id="doneBtn" hidden>✅ Done</button>
+      <button id="rotateBtn" hidden>↻ Rotate</button>
       <button id="addBtn" hidden>➕ Add drawing</button>
     </div>
   </div>
 
   <input type="file" id="fileInput" accept="image/*" capture="environment" hidden>
 
-  <script src="sketch.js?v=16"></script>
+  <script src="sketch.js?v=18"></script>
 </body>
 </html>

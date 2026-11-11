@@ -4,7 +4,7 @@ const doneBtn = document.getElementById('doneBtn');
 const addBtn = document.getElementById('addBtn');
 const slider = document.getElementById('slider');
 const sliderWrap = document.getElementById('sliderWrap');
-const hint = document.getElementById('hint');
+const rotateBtn = document.getElementById('rotateBtn');
 const buttonsRow = document.getElementById('buttons');
 const canvas = document.getElementById('drawing');
 const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -19,6 +19,11 @@ let mode = 'start';
 const colorPicker = document.getElementById('colorPicker');
 let chosenColor = 'black'; // which marker color the next photo is scanned for
 let wipeOnLoad = false; // true when the next photo should clear all drawings
+
+// How many 90-degree clockwise turns your photos need to look upright.
+// Set by the Rotate button and remembered for next time.
+let photoTurns = 0;
+try { photoTurns = parseInt(localStorage.getItem('photoTurns'), 10) || 0; } catch (e) {}
 
 // ---------- Buttons ----------
 
@@ -51,7 +56,8 @@ slider.addEventListener('input', removeBackground);
 function enterEditMode() {
   mode = 'editing';
   canvas.style.display = 'block';
-  hint.style.display = 'none';
+  takeBtn.hidden = false;
+  rotateBtn.hidden = false;
   sliderWrap.style.display = 'block';
   doneBtn.hidden = false;
   addBtn.hidden = true;
@@ -67,9 +73,37 @@ function enterFloatMode() {
   addBtn.hidden = false;
   takeBtn.textContent = '🔄 Start over';
   tools.hidden = false;
+  rotateBtn.hidden = true;
+  takeBtn.hidden = creatures.length === 0; // "Start over" only shows once there's something to wipe
 }
 
 // ---------- Taking the photo ----------
+// Turns the current photo 90 degrees clockwise (does not redo the background removal)
+function rotateSourceOnce() {
+  const tmp = document.createElement('canvas');
+  tmp.width = sourceData.width;
+  tmp.height = sourceData.height;
+  tmp.getContext('2d').putImageData(sourceData, 0, 0);
+
+  canvas.width = tmp.height;
+  canvas.height = tmp.width;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.translate(canvas.width, 0);
+  ctx.rotate(Math.PI / 2);
+  ctx.drawImage(tmp, 0, 0);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+  sourceData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+}
+
+rotateBtn.addEventListener('click', () => {
+  if (!sourceData) return;
+  rotateSourceOnce();
+  photoTurns = (photoTurns + 1) % 4;
+  try { localStorage.setItem('photoTurns', photoTurns); } catch (e) {}
+  removeBackground();
+});
+
 
 fileInput.addEventListener('change', () => {
   const file = fileInput.files[0];
@@ -90,6 +124,7 @@ fileInput.addEventListener('change', () => {
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
     sourceData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    for (let i = 0; i < photoTurns; i++) rotateSourceOnce();
     URL.revokeObjectURL(url);
 
     enterEditMode();
@@ -663,3 +698,5 @@ function pet(c) {
   world.appendChild(c.heartEl);
   c.heartT = 0;
 }
+
+enterFloatMode(); // start straight in the playspace
