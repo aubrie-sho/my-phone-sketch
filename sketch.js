@@ -73,9 +73,9 @@ function enterFloatMode() {
   sliderWrap.style.display = 'none';
   doneBtn.hidden = true;
   addBtn.hidden = false;
-  tools.hidden = false;
-  takeBtn.hidden = true; // no Start over button in the gallery
   rotateBtn.hidden = true;
+  takeBtn.hidden = true;        // no Start over in the gallery
+  tools.hidden = false;
   instructions.hidden = false;
 }
 
