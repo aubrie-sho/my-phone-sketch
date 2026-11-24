@@ -128,15 +128,21 @@
       font-weight: normal;
     }
     #colorButtons {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-      width: 100%;
-      max-width: 560px;
+      display: flex;
+      justify-content: center;
+      gap: 14px;
     }
     #colorButtons button {
-      padding: 14px 0;
-      font-size: 20px;
+      background: none;
+      padding: 0;
+      border-radius: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #colorButtons img {
+      display: block;
+      height: 70px;      /* resize the color buttons here */
+      width: auto;
+      pointer-events: none;
     }
     #tools {
       position: fixed;
@@ -164,17 +170,30 @@
     }
     #tools[hidden] { display: none; }
     .tool {
-      min-width: 96px;
-      font-size: 22px;
-      padding: 18px 28px;
-      border-radius: 14px;
-      background: #ff69b4;
-      color: white;
-      text-align: center;
+      background: none;
+      padding: 0;
+      border-radius: 0;
       touch-action: none;
       -webkit-user-select: none;
       user-select: none;
       -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .tool img {
+      display: block;
+      max-width: 76px;    /* icon size inside the bar */
+      max-height: 62px;
+      width: auto;
+      height: auto;
+      pointer-events: none;
+      -webkit-user-drag: none;
+    }
+    #tools .tool { pointer-events: auto; } /* the icons still catch drags */
+
+    /* The copy that follows your finger is a bit bigger so your finger doesn't hide it */
+    .tool-ghost img {
+      max-width: 100px;
+      max-height: 84px;
     }
     .tool.dragging { opacity: 0.4; }  /* the slot dims while you carry its ghost */
     .tool-ghost {
@@ -218,7 +237,7 @@
     }
     #addBtn img {
       display: block;
-      height: 150px;   /* change this to resize the button */
+      height: 125px;   /* change this to resize the button */
       width: auto;
       pointer-events: none;
     }
@@ -231,9 +250,9 @@
   <div id="tools" hidden>
     <img id="toolsBg" src="ToolsBar.png" alt="">
     <div id="toolList">
-      <div class="tool" data-tool="food">food</div>
-      <div class="tool" data-tool="broom">broom</div>
-      <div class="tool" data-tool="hand">hand</div>
+      <div class="tool" data-tool="food"><img src="Pizza.png" alt="food" draggable="false"></div>
+      <div class="tool" data-tool="broom"><img src="Broom_Main.png" alt="broom" draggable="false"></div>
+      <div class="tool" data-tool="hand"><img src="Hand_Main.png" alt="hand" draggable="false"></div>
     </div>
   </div>
   <div id="instructions" hidden>
@@ -249,10 +268,10 @@
   <div id="colorPicker" hidden>
     <h2>What color did you draw it?</h2>
     <div id="colorButtons">
-      <button data-color="red" style="background:#e53935">Red</button>
-      <button data-color="green" style="background:#43a047">Green</button>
-      <button data-color="blue" style="background:#1e88e5">Blue</button>
-      <button data-color="purple" style="background:#8e24aa">Purple</button>
+      <button data-color="red"><img src="Red.png" alt="Red"></button>
+      <button data-color="green"><img src="Green.png" alt="Green"></button>
+      <button data-color="blue"><img src="Blue.png" alt="Blue"></button>
+      <button data-color="purple"><img src="Purple.png" alt="Purple"></button>
     </div>
   </div>
 
