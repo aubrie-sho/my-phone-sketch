@@ -211,6 +211,19 @@
 
     /* Hide it while the color question is open so they don't overlap */
     body:has(#colorPicker:not([hidden])) #instructions { visibility: hidden; }
+
+    #addBtn {
+      background: none;
+      padding: 0;
+      border-radius: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #addBtn img {
+      display: block;
+      height: 100px;   /* change this to resize the button */
+      width: auto;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -254,7 +267,7 @@
       <button id="takeBtn">📸 Take photo</button>
       <button id="doneBtn" hidden>✅ Done</button>
       <button id="rotateBtn" hidden>↻ Rotate</button>
-      <button id="addBtn" hidden>➕ Add drawing</button>
+      <button id="addBtn" hidden aria-label="Add drawing"><img src="AddDrawing.png" alt=""></button>
     </div>
   </div>
 

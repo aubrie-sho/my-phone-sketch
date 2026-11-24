@@ -73,10 +73,9 @@ function enterFloatMode() {
   sliderWrap.style.display = 'none';
   doneBtn.hidden = true;
   addBtn.hidden = false;
-  takeBtn.textContent = '🔄 Start over';
   tools.hidden = false;
+  takeBtn.hidden = true; // no Start over button in the gallery
   rotateBtn.hidden = true;
-  takeBtn.hidden = creatures.length === 0; // "Start over" only shows once there's something to wipe
   instructions.hidden = false;
 }
 
