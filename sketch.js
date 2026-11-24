@@ -252,7 +252,10 @@ function removeBackground() {
 const touchLayer = document.getElementById('touchLayer');
 
 const world = document.getElementById('world');
-const WORLD_SCALE = 2;      // world is this many screens wide and tall
+const WORLD_SCALE = 3;      // how many screen-heights tall the map is (was 2, raise for a bigger map)
+const BACKGROUND_SRC = 'background.png?v=2';
+let bgAspect = 0;           // the image's width / height, filled in once it loads
+world.style.backgroundImage = `url('${BACKGROUND_SRC}')`;
 const PAN_THRESHOLD = 10;   // px a finger must move before it counts as a drag
 const HOLD_MS = 150;        // how long you hold still before drawings are pulled in
 
@@ -308,8 +311,13 @@ function applyCamera() {
 }
 
 function sizeWorld() {
-  worldW = layoutW() * WORLD_SCALE;
+  const aspect = bgAspect || (layoutW() / layoutH()); // until the image loads, guess screen shape
   worldH = layoutH() * WORLD_SCALE;
+  worldW = worldH * aspect;
+  if (worldW < layoutW()) {   // a very tall image: make sure it still covers the screen
+    worldW = layoutW();
+    worldH = worldW / aspect;
+  }
   world.style.width = worldW + 'px';
   world.style.height = worldH + 'px';
   clampCamera();
@@ -327,6 +335,18 @@ window.addEventListener('resize', applyOrientation);
 window.addEventListener('orientationchange', () => setTimeout(applyOrientation, 200));
 window.addEventListener('pageshow', applyOrientation);
 document.addEventListener('visibilitychange', applyOrientation);
+
+// Once the image loads, size the map to match it and start in the middle
+const bgImg = new Image();
+bgImg.onload = () => {
+  bgAspect = bgImg.naturalWidth / bgImg.naturalHeight;
+  sizeWorld();
+  camX = (worldW - layoutW()) / 2;
+  camY = (worldH - layoutH()) / 2;
+  clampCamera();
+  applyCamera();
+};
+bgImg.src = BACKGROUND_SRC;
 
 // Tweak these to change how the touch feels
 const ATTRACT_SPEED = 240; // top speed (px/s) when rushing toward your finger
