@@ -370,6 +370,15 @@ const BROOM_RADIUS = 160;  // px: how close the broom must be to scare a drawing
 const BROOM_SPEED = 300;   // top speed (px/s) when fleeing
 const BROOM_EASE = 6;      // how quickly they speed up away from it
 
+const CHAT_RADIUS = 160;     // px between two drawings' centers to count as "near"
+const CHAT_CHANCE = 0.2;     // odds that two near drawings start talking
+const CHAT_MIN = 3.5;        // shortest conversation (seconds)
+const CHAT_MAX = 6.5;        // longest conversation (seconds)
+const CHAT_RETRY = 5;        // seconds before a pair that rolled "no" can roll again
+const CHAT_REST = 10;        // seconds a drawing waits after a conversation before chatting again
+const CHAT_BOUNCE_H = 14;    // height of the little chat bounces (px)
+const CHAT_BOUNCE_TIME = 0.35; // how long each bounce takes (seconds)
+
 let creatures = []; // every drawing on the screen
 let rafId = null;
 let lastTime = 0;
@@ -446,6 +455,7 @@ window.addEventListener('mouseup', endTouch);
 // Send every drawing flying outward from the point where the finger was
 function scatter(fx, fy) {
   for (const c of creatures) {
+    endChat(c);
     const dx = (c.x + c.w / 2) - fx;
     const dy = (c.y + c.h / 2) - fy;
     const dist = Math.hypot(dx, dy);
@@ -529,6 +539,13 @@ function addCreature() {
     heartEl: null,
     heartT: 0,
     lastScare: -Infinity,
+    chatT: -1,            // -1 = not chatting, otherwise seconds into the conversation
+    chatLen: 0,
+    chatPartner: null,
+    chatEl: null,
+    chatReadyAt: 0,       // earliest time (ms) this drawing can start chatting
+    bounceT: -1,
+    bounceTimer: 0,
   });
 
   enterFloatMode();
@@ -544,6 +561,7 @@ function wipeCreatures() {
   for (const c of creatures) {
     c.el.remove();
     if (c.heartEl) c.heartEl.remove();
+    if (c.chatEl) c.chatEl.remove();
   }
   creatures = [];
   if (rafId) cancelAnimationFrame(rafId);
@@ -551,6 +569,66 @@ function wipeCreatures() {
 }
 
 // ----- The animation loop -----
+
+// ----- Conversations between drawings -----
+
+// Looks for two nearby drawings and rolls the dice once per encounter
+function checkChats(now) {
+  for (let i = 0; i < creatures.length; i++) {
+    const a = creatures[i];
+    if (a.chatT >= 0 || now < a.chatReadyAt) continue;
+    for (let j = i + 1; j < creatures.length; j++) {
+      const b = creatures[j];
+      if (b.chatT >= 0 || now < b.chatReadyAt) continue;
+      const dx = (a.x + a.w / 2) - (b.x + b.w / 2);
+      const dy = (a.y + a.h / 2) - (b.y + b.h / 2);
+      if (Math.hypot(dx, dy) > CHAT_RADIUS) continue;
+
+      if (Math.random() < CHAT_CHANCE) {
+        startChat(a, b);
+      } else {
+        a.chatReadyAt = b.chatReadyAt = now + CHAT_RETRY * 1000;
+      }
+      break; // this drawing has had its roll for now
+    }
+  }
+}
+
+function startChat(a, b) {
+  const len = CHAT_MIN + Math.random() * (CHAT_MAX - CHAT_MIN);
+  for (const [c, partner] of [[a, b], [b, a]]) {
+    c.chatT = 0;
+    c.chatLen = len;
+    c.chatPartner = partner;
+    c.bounceT = -1;
+    c.bounceTimer = 0.3 + Math.random();
+    c.chatEl = document.createElement('img');
+    c.chatEl.className = 'heart';   // same floating-icon style as the heart
+    c.chatEl.src = 'Chat.png';
+    c.chatEl.alt = '';
+    world.appendChild(c.chatEl);
+  }
+}
+
+// Ends the conversation for a drawing and for whoever it was talking to
+function endChat(c) {
+  if (c.chatT < 0) return;
+  const partner = c.chatPartner;
+  stopChatFor(c);
+  if (partner && partner.chatPartner === c) stopChatFor(partner);
+}
+
+function stopChatFor(c) {
+  c.chatT = -1;
+  c.chatPartner = null;
+  if (c.chatEl) { c.chatEl.remove(); c.chatEl = null; }
+  c.chatReadyAt = performance.now() + CHAT_REST * 1000;
+
+  // Wander off in a fresh direction
+  const angle = Math.random() * Math.PI * 2;
+  c.vx = Math.cos(angle) * c.cruise;
+  c.vy = Math.sin(angle) * c.cruise;
+}
 
 function tick(now) {
   if (creatures.length === 0) {
@@ -565,6 +643,8 @@ function tick(now) {
   // Floor of the world, leaving room for the button row at the bottom of the screen
   const bottom = worldH - (layoutH() - buttonsTop()) - 8;
 
+  checkChats(now); // do any two nearby drawings start talking?
+
   for (const c of creatures) {
     // Distance from this drawing to the food and to the broom (if being dragged)
     const fdx = food.x - (c.x + c.w / 2);
@@ -576,18 +656,21 @@ function tick(now) {
     const bdist = Math.hypot(bdx, bdy) || 1;
 
     if (food.active && fdist < FOOD_RADIUS) {
+      endChat(c);
       // Food is close: rush toward it, slowing down as they arrive
       const want = Math.min(FOOD_SPEED, fdist * 2);
       const ease = Math.min(1, FOOD_EASE * dt);
       c.vx += (fdx / fdist * want - c.vx) * ease;
       c.vy += (fdy / fdist * want - c.vy) * ease;
     } else if (broom.active && bdist < BROOM_RADIUS) {
+      endChat(c);
       scare(c); // shows the sad icon (once per cooldown)
       // Broom is close: run straight away from it
       const ease = Math.min(1, BROOM_EASE * dt);
       c.vx += (bdx / bdist * BROOM_SPEED - c.vx) * ease;
       c.vy += (bdy / bdist * BROOM_SPEED - c.vy) * ease;
     } else if (touch.active && touch.mode === 'hold' && now - touch.t0 > HOLD_MS) {
+      endChat(c);
       // Finger is down: steer toward it, slowing down as they get close
       const dx = touch.x - (c.x + c.w / 2);
       const dy = touch.y - (c.y + c.h / 2);
@@ -596,7 +679,7 @@ function tick(now) {
       const ease = Math.min(1, ATTRACT_EASE * dt);
       c.vx += (dx / dist * want - c.vx) * ease;
       c.vy += (dy / dist * want - c.vy) * ease;
-    } else {
+    } else if (c.chatT < 0) {
       // Finger is up: calm back down to normal drift speed, keeping the direction
       const sp = Math.hypot(c.vx, c.vy) || 1;
       const newSp = c.cruise + (sp - c.cruise) * Math.exp(-SETTLE * dt);
@@ -604,35 +687,62 @@ function tick(now) {
       c.vy *= newSp / sp;
     }
 
-    // Move
-    c.x += c.vx * dt;
-    c.y += c.vy * dt;
+    // Is it mid-conversation? (a chat ends on its own after its length is up)
+    let chatting = c.chatT >= 0;
+    if (chatting) {
+      c.chatT += dt;
+      if (c.chatT >= c.chatLen) { endChat(c); chatting = false; }
+    }
 
-    // Bounce off the edges
-    if (c.x < 0) { c.x = 0; c.vx = Math.abs(c.vx); }
-    if (c.x + c.w > W) { c.x = W - c.w; c.vx = -Math.abs(c.vx); }
-    if (c.y < 0) { c.y = 0; c.vy = Math.abs(c.vy); }
-    if (c.y + c.h > bottom) { c.y = bottom - c.h; c.vy = -Math.abs(c.vy); }
+    // Move (talking drawings stand still)
+    if (!chatting) {
+      c.x += c.vx * dt;
+      c.y += c.vy * dt;
 
-    // Waddle faster when moving faster
-    const speedNow = Math.hypot(c.vx, c.vy);
-    const excite = Math.min(2.5, Math.max(1, speedNow / c.cruise));
-    c.phase += dt * c.step * excite;
+      // Bounce off the edges
+      if (c.x < 0) { c.x = 0; c.vx = Math.abs(c.vx); }
+      if (c.x + c.w > W) { c.x = W - c.w; c.vx = -Math.abs(c.vx); }
+      if (c.y < 0) { c.y = 0; c.vy = Math.abs(c.vy); }
+      if (c.y + c.h > bottom) { c.y = bottom - c.h; c.vy = -Math.abs(c.vy); }
 
-    const tilt = Math.sin(c.phase) * 0.22;
-        // Two quick jumps when petted (the abs of one sine wave makes two humps)
+      // Waddle faster when moving faster
+      const speedNow = Math.hypot(c.vx, c.vy);
+      const excite = Math.min(2.5, Math.max(1, speedNow / c.cruise));
+      c.phase += dt * c.step * excite;
+    }
+
+    const tilt = chatting ? 0 : Math.sin(c.phase) * 0.22;
+    const waddleHop = chatting ? 0 : Math.abs(Math.sin(c.phase)) * 8;
+
+    // Two quick jumps when petted (the abs of one sine wave makes two humps)
     let jumpLift = 0;
     if (c.jumpT >= 0) {
       c.jumpT += dt;
       if (c.jumpT >= JUMP_TIME) c.jumpT = -1;
       else jumpLift = Math.abs(Math.sin(c.jumpT / JUMP_TIME * Math.PI * 2)) * JUMP_H;
     }
-    const hop = Math.abs(Math.sin(c.phase)) * 8 + jumpLift;
+
+    // Small occasional bounces while talking
+    if (chatting) {
+      c.bounceTimer -= dt;
+      if (c.bounceTimer <= 0 && c.bounceT < 0) {
+        c.bounceT = 0;
+        c.bounceTimer = 0.6 + Math.random() * 1.6;
+      }
+    }
+    let bounceLift = 0;
+    if (c.bounceT >= 0) {
+      c.bounceT += dt;
+      if (c.bounceT >= CHAT_BOUNCE_TIME) c.bounceT = -1;
+      else bounceLift = Math.sin(c.bounceT / CHAT_BOUNCE_TIME * Math.PI) * CHAT_BOUNCE_H;
+    }
+
+    const hop = waddleHop + jumpLift + bounceLift;
 
     c.el.style.transform =
       `translate(${c.x}px, ${c.y - hop}px) rotate(${tilt}rad)`;
 
-        // The heart rises above the drawing and fades out
+    // The heart/sad icon rises above the drawing and fades out
     if (c.heartEl) {
       c.heartT += dt;
       const p = c.heartT / HEART_TIME;
@@ -644,6 +754,14 @@ function tick(now) {
         c.heartEl.style.transform =
           `translate(${c.x + c.w / 2}px, ${c.y - hop - 6 - p * 40}px) translate(-50%, -100%)`;
       }
+    }
+
+    // The chat icon bobs above its head (it sits higher if a heart is showing too)
+    if (c.chatEl) {
+      const bob = Math.abs(Math.sin(c.chatT * 5)) * 8;
+      const higher = c.heartEl ? 36 : 0;
+      c.chatEl.style.transform =
+        `translate(${c.x + c.w / 2}px, ${c.y - hop - 6 - bob - higher}px) translate(-50%, -100%)`;
     }
   }
 
