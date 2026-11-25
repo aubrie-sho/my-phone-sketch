@@ -371,13 +371,17 @@ const BROOM_SPEED = 300;   // top speed (px/s) when fleeing
 const BROOM_EASE = 6;      // how quickly they speed up away from it
 
 const CHAT_RADIUS = 160;     // px between two drawings' centers to count as "near"
-const CHAT_CHANCE = 100;     // odds that two near drawings start talking
-const CHAT_MIN = 3.5;        // shortest conversation (seconds)
-const CHAT_MAX = 6.5;        // longest conversation (seconds)
+const CHAT_CHANCE = 0.7;     // odds that two near drawings start talking
+const CHAT_MIN = 5.5;        // shortest conversation (seconds)
+const CHAT_MAX = 20.5;        // longest conversation (seconds)
 const CHAT_RETRY = 5;        // seconds before a pair that rolled "no" can roll again
 const CHAT_REST = 10;        // seconds a drawing waits after a conversation before chatting again
 const CHAT_BOUNCE_H = 14;    // height of the little chat bounces (px)
 const CHAT_BOUNCE_TIME = 0.35; // how long each bounce takes (seconds)
+
+const MOOD_CHANCE = 1;   // odds a finished conversation leaves them with a mood
+const ANGRY_SHARE = 0.5;   // when there is a mood, odds it's angry (the rest are happy)
+const MOOD_TIME = 15;      // seconds the mood icons stay above their heads
 
 let creatures = []; // every drawing on the screen
 let rafId = null;
@@ -546,6 +550,8 @@ function addCreature() {
     chatReadyAt: 0,       // earliest time (ms) this drawing can start chatting
     bounceT: -1,
     bounceTimer: 0,
+    moodEl: null,
+    moodT: 0,
   });
 
   enterFloatMode();
@@ -562,6 +568,7 @@ function wipeCreatures() {
     c.el.remove();
     if (c.heartEl) c.heartEl.remove();
     if (c.chatEl) c.chatEl.remove();
+    if (c.moodEl) c.moodEl.remove();
   }
   creatures = [];
   if (rafId) cancelAnimationFrame(rafId);
@@ -597,6 +604,7 @@ function checkChats(now) {
 function startChat(a, b) {
   const len = CHAT_MIN + Math.random() * (CHAT_MAX - CHAT_MIN);
   for (const [c, partner] of [[a, b], [b, a]]) {
+    removeMood(c);
     c.chatT = 0;
     c.chatLen = len;
     c.chatPartner = partner;
@@ -628,6 +636,33 @@ function stopChatFor(c) {
   const angle = Math.random() * Math.PI * 2;
   c.vx = Math.cos(angle) * c.cruise;
   c.vy = Math.sin(angle) * c.cruise;
+}
+
+// ----- Moods after a conversation -----
+
+function setMood(c, src) {
+  removeMood(c);
+  c.moodEl = document.createElement('img');
+  c.moodEl.className = 'heart';   // same floating-icon style as the heart
+  c.moodEl.src = src;
+  c.moodEl.alt = '';
+  world.appendChild(c.moodEl);
+  c.moodT = 0;
+}
+
+function removeMood(c) {
+  if (c.moodEl) { c.moodEl.remove(); c.moodEl = null; }
+}
+
+// Called when a conversation finishes: maybe leave both drawings angry or happy
+function chatMood(a, b) {
+  if (!a || !b || Math.random() >= MOOD_CHANCE) return;
+  const icons = Math.random() < ANGRY_SHARE
+    ? ['Exclamation.png', 'AngryMarks.png']
+    : ['HappyMarks.png', 'Smile.png'];
+  if (Math.random() < 0.5) icons.reverse(); // which drawing gets which icon is random
+  setMood(a, icons[0]);
+  setMood(b, icons[1]);
 }
 
 function tick(now) {
@@ -691,7 +726,12 @@ function tick(now) {
     let chatting = c.chatT >= 0;
     if (chatting) {
       c.chatT += dt;
-      if (c.chatT >= c.chatLen) { endChat(c); chatting = false; }
+      if (c.chatT >= c.chatLen) {
+        const partner = c.chatPartner; // grab it before endChat clears it
+        endChat(c);
+        chatMood(c, partner);
+        chatting = false;
+      }
     }
 
     // Move (talking drawings stand still)
@@ -763,7 +803,21 @@ function tick(now) {
       c.chatEl.style.transform =
         `translate(${c.x + c.w / 2}px, ${c.y - hop - 6 - bob - higher}px) translate(-50%, -100%)`;
     }
+
+        // The mood icon bobs above its head for MOOD_TIME seconds, even while it walks around
+    if (c.moodEl) {
+      c.moodT += dt;
+      if (c.moodT >= MOOD_TIME) {
+        removeMood(c);
+      } else {
+        const bob = Math.abs(Math.sin(c.moodT * 5)) * 8;
+        const higher = c.heartEl ? 36 : 0;
+        c.moodEl.style.transform =
+          `translate(${c.x + c.w / 2}px, ${c.y - hop - 6 - bob - higher}px) translate(-50%, -100%)`;
+      }
+    }
   }
+    
 
   rafId = requestAnimationFrame(tick);
 }
