@@ -359,6 +359,9 @@ const JUMP_H = 40;       // how high each jump goes (px)
 const HEART_TIME = 1.4;  // how long the heart floats before fading
 const PET_COOLDOWN = 2000; // ms before the same drawing can be hearted again
 
+const SAD_COOLDOWN = 2500; // ms before the same drawing can show the sad icon again
+const SAD_JUMPS = true;    // set to false if you want the sad icon without the jumps
+
 const FOOD_RADIUS = 180;  // px: how close the food must be to a drawing to attract it
 const FOOD_SPEED = 260;   // top speed (px/s) when rushing to the food
 const FOOD_EASE = 5;      // how quickly they speed up toward it
@@ -525,6 +528,7 @@ function addCreature() {
     lastPet: -Infinity,
     heartEl: null,
     heartT: 0,
+    lastScare: -Infinity,
   });
 
   enterFloatMode();
@@ -578,6 +582,7 @@ function tick(now) {
       c.vx += (fdx / fdist * want - c.vx) * ease;
       c.vy += (fdy / fdist * want - c.vy) * ease;
     } else if (broom.active && bdist < BROOM_RADIUS) {
+      scare(c); // shows the sad icon (once per cooldown)
       // Broom is close: run straight away from it
       const ease = Math.min(1, BROOM_EASE * dt);
       c.vx += (bdx / bdist * BROOM_SPEED - c.vx) * ease;
@@ -649,6 +654,21 @@ function tick(now) {
 
 const tools = document.getElementById('tools');
 let ghost = null;
+let ghostPos = { x: 0, y: 0 }; // where the dragged tool is, in layout coordinates
+let ghostFrame = 0;            // 0 = main picture, 1 = animation picture
+let animTimer = null;
+
+// The two pictures each animated tool flips between
+const TOOL_FRAMES = {
+  hand:  ['Hand_Main.png',  'Hand_Anim.png'],
+  broom: ['Broom_Main.png', 'Broom_Anim.png']
+};
+const ANIM_MS = 180; // how fast the tool flips between its two pictures
+
+// Load the extra pictures ahead of time so the swap never flickers
+['HeartIcon.png', 'SadIcon.png', 'Hand_Anim.png', 'Broom_Anim.png'].forEach((src) => {
+  new Image().src = src;
+});
 
 tools.addEventListener('pointerdown', (e) => {
   const tool = e.target.closest('.tool');
@@ -665,6 +685,10 @@ tools.addEventListener('pointerdown', (e) => {
   const p0 = toLayout(e.clientX, e.clientY);
   moveGhost(p0.x, p0.y, tool.dataset.tool);
 
+  // Flip the tool between its two pictures while it's touching a drawing
+  ghostFrame = 0;
+  animTimer = setInterval(updateGhostFrame, ANIM_MS);
+
   const onMove = (ev) => {
     const p = toLayout(ev.clientX, ev.clientY);
     moveGhost(p.x, p.y, tool.dataset.tool);
@@ -672,6 +696,8 @@ tools.addEventListener('pointerdown', (e) => {
   const onEnd = () => {
     food.active = false;
     broom.active = false;
+    clearInterval(animTimer);
+    animTimer = null;
     tool.removeEventListener('pointermove', onMove);
     tool.removeEventListener('pointerup', onEnd);
     tool.removeEventListener('pointercancel', onEnd);
@@ -684,7 +710,41 @@ tools.addEventListener('pointerdown', (e) => {
   tool.addEventListener('pointercancel', onEnd);
 });
 
+// Which drawings is the dragged hand or broom touching right now?
+function drawingsUnderGhost(toolName) {
+  const found = [];
+  for (const c of creatures) {
+    if (toolName === 'hand') {
+      // Over the drawing itself (creature positions are in world coords, so shift by the camera)
+      const left = c.x - camX, top = c.y - camY;
+      if (ghostPos.x >= left && ghostPos.x <= left + c.w &&
+          ghostPos.y >= top && ghostPos.y <= top + c.h) found.push(c);
+    } else if (toolName === 'broom') {
+      // Close enough to scare it
+      const dx = (c.x + c.w / 2) - (ghostPos.x + camX);
+      const dy = (c.y + c.h / 2) - (ghostPos.y + camY);
+      if (Math.hypot(dx, dy) < BROOM_RADIUS) found.push(c);
+    }
+  }
+  return found;
+}
+
+// Swaps the dragged tool's picture back and forth while it's touching a drawing
+function updateGhostFrame() {
+  if (!ghost) return;
+  const name = ghost.dataset.tool;
+  const frames = TOOL_FRAMES[name];
+  if (!frames) return; // food has no animation
+
+  const acting = drawingsUnderGhost(name).length > 0;
+  ghostFrame = acting ? 1 - ghostFrame : 0; // rests on the main picture when not touching
+  const img = ghost.querySelector('img');
+  if (img && !img.src.endsWith(frames[ghostFrame])) img.src = frames[ghostFrame];
+}
+
 function moveGhost(x, y, toolName) {
+  ghostPos.x = x;
+  ghostPos.y = y;
   ghost.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
 
   if (toolName === 'food') {
@@ -694,35 +754,44 @@ function moveGhost(x, y, toolName) {
     return;
   }
 
-    if (toolName === 'broom') {
+  if (toolName === 'broom') {
     broom.active = true;
     broom.x = x + camX;
     broom.y = y + camY;
     return;
   }
 
-  // Is the ghost over a drawing? (creature positions are in world coords, so shift by the camera)
-  for (const c of creatures) {
-    const left = c.x - camX, top = c.y - camY;
-    if (x >= left && x <= left + c.w && y >= top && y <= top + c.h) {
-      if (toolName === 'hand') pet(c);
-    }
-  }
+  // Hand: pet any drawing it's over
+  for (const c of drawingsUnderGhost('hand')) pet(c);
+}
+
+// ----- Icons that pop up above a drawing -----
+
+// Makes the drawing jump twice (if asked to) and floats an icon above it
+function react(c, src, jump) {
+  if (jump) c.jumpT = 0; // tick() runs the two jumps
+
+  if (c.heartEl) c.heartEl.remove();
+  c.heartEl = document.createElement('img');
+  c.heartEl.className = 'heart';
+  c.heartEl.src = src;
+  c.heartEl.alt = '';
+  world.appendChild(c.heartEl);
+  c.heartT = 0; // tick() floats it up and fades it
 }
 
 function pet(c) {
   const now = performance.now();
   if (now - c.lastPet < PET_COOLDOWN) return;
   c.lastPet = now;
+  react(c, 'HeartIcon.png', true);
+}
 
-  c.jumpT = 0; // tick() runs the two jumps
-
-  if (c.heartEl) c.heartEl.remove();
-  c.heartEl = document.createElement('div');
-  c.heartEl.className = 'heart';
-  c.heartEl.textContent = 'heart'; // swap for a sprite later
-  world.appendChild(c.heartEl);
-  c.heartT = 0;
+function scare(c) {
+  const now = performance.now();
+  if (now - c.lastScare < SAD_COOLDOWN) return;
+  c.lastScare = now;
+  react(c, 'SadIcon.png', SAD_JUMPS);
 }
 
 enterFloatMode(); // start straight in the playspace
