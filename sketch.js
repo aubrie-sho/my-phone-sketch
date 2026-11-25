@@ -371,7 +371,7 @@ const BROOM_SPEED = 300;   // top speed (px/s) when fleeing
 const BROOM_EASE = 6;      // how quickly they speed up away from it
 
 const CHAT_RADIUS = 160;     // px between two drawings' centers to count as "near"
-const CHAT_CHANCE = 0.2;     // odds that two near drawings start talking
+const CHAT_CHANCE = 100;     // odds that two near drawings start talking
 const CHAT_MIN = 3.5;        // shortest conversation (seconds)
 const CHAT_MAX = 6.5;        // longest conversation (seconds)
 const CHAT_RETRY = 5;        // seconds before a pair that rolled "no" can roll again
